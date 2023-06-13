@@ -10,7 +10,7 @@ from sklearn.impute import SimpleImputer
 import matplotlib.font_manager as font_manager
 
 # read the xlsx file
-df = pd.read_excel('/Users/renyuxuan/Desktop/Research/RCFM_FT-IR_forPython.xlsx', sheet_name='RCFM_imposing')
+df = pd.read_excel('/Users/renyuxuan/Desktop/Research/RCFM_FT-IR_output.xlsx', sheet_name='RCFM_Underestimated')
 X = df['FM']
 y1 = df['RCFM']
 y2 = df['RCFM_imposing']
