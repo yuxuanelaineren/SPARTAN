@@ -4,16 +4,14 @@ PM10Folder = '/Users/renyuxuan/Desktop/Pie_dust/PM10';
 direc_output = '/Users/renyuxuan/Desktop/Pie_dust/FeDust_ratio';
 
 % Specify the site names and their corresponding labels
-siteNames = {'AEAZ', 'AUMN', 'BDDU', 'CADO', 'CAHA',...
-             'CALE', 'CASH', 'CHTS', 'IDBD', 'ILHA',...
-             'ILNZ', 'INDH', 'INKA', 'KRSE', 'KRUL', 'MXMC', 'NGIL',...
-             'PRFJ', 'SGSU', 'TWKA', 'TWTA',...
-             'USPA', 'VNHN', 'ZAJB', 'ZAPR'};
-siteLabels = {'Abu Dhabi', 'Melbourne', 'Dhaka', 'Downsview', 'Halifax',...
-              'Lethbridge', 'Sherbrooke', 'Beijing', 'Bandung', 'Haifa', 'Rehovot',...
-              'Delhi', 'Kanpur', 'Seoul', 'Ulsan', 'Mexico City', 'Ilorin',...
-              'Fajardo', 'Singapore', 'Kaohsiung', 'Taipei',...
-              'Pasadena', 'Hanoi', 'Johannesburg', 'Pretoria'};
+siteNames = {'AEAZ', 'NGIL', 'INKA', 'BDDU', 'CHTS', 'ILNZ', 'VNHN',...
+             'ILHA', 'INDH', 'PRFJ', 'KRSE', 'TWKA', 'IDBD',...
+             'ZAPR', 'KRUL', 'SGSU', 'ZAJB', 'MXMC', 'TWTA',...
+             'USPA', 'CALE', 'CADO', 'CASH', 'AUMN'};
+siteLabels = {'Masdar', 'Ilorin', 'Kanpur', 'Dhaka', 'Beijing', 'Rehovot', 'Hanoi',...
+              'Haifa', 'Delhi', 'Fajardo', 'Seoul', 'Kaohsiung','Bandung',...
+              'Pretoria', 'Ulsan', 'Singapore', 'Johannesburg', 'Mexico City', 'Taipei',...
+              'Pasadena', 'Lethbridge', 'Downsview', 'Sherbrooke', 'Melbourne'};
 
 % Initialize arrays to store Fe/Al ratios and standard deviations
 FeDustRatioPM25avg = zeros(1, numel(siteNames));
@@ -22,7 +20,7 @@ FeDustRatioPM25sd = zeros(1, numel(siteNames));
 FeDustRatioPM10sd = zeros(1, numel(siteNames));
 
 % Open the text file for writing
-fid = fopen('/Users/renyuxuan/Desktop/Pie_dust/FeDust_ratio/FeDustRatios.txt', 'w');
+fid = fopen('/Users/renyuxuan/Desktop/Pie_dust/FeDust_ratio/FeDustRatios_updated.txt', 'w');
 
 % Regional varying MAL and CF values:
 MAL_CF={'AEAZ'	'AUMN'	'ARCB'	'BDDU'	'BIBU'	'CADO'	'CAHA'	'CAKE'	'CALE'	'CASH'	'CHTS'	'CLST'	'CODC'	'ETAD'	'IDBD'	'ILHA'	'ILNZ'	'INDH'	'INKA'	'KRSE'	'KRUL'	'MXMC'	'NGIL'	'PHMO'	'PRFJ'	'SGSU'	'TWKA'	'TWTA'	'USBA'	'USBO'	'USMC'	'USNO'	'USPA'	'VNHN'	'ZAJB'	'ZAPR';
@@ -127,7 +125,7 @@ for i = 1:numel(siteNames)
     PM25DustValuesNumeric = cell2mat(PM25DustValuesNumeric(~cellfun('isempty', PM25DustValuesNumeric)));
     
     avgFeDustRatioPM25 = mean(PM25RatioValuesNumeric);
-    sdFeDustRatioPM25 = std(PM25RatioValuesNumeric);
+    seFeDustRatioPM25 = std(PM25RatioValuesNumeric) / sqrt(length(PM25RatioValuesNumeric));
     avgDustPM25 = mean(PM25DustValuesNumeric);
 
     % Read PM10 files
@@ -218,16 +216,16 @@ for i = 1:numel(siteNames)
     PM10RatioValuesNumeric = cell2mat(PM10RatioValuesNumeric(~cellfun('isempty', PM10RatioValuesNumeric)));
     
     avgFeDustRatioPM10 = mean(PM10RatioValuesNumeric);
-    sdFeDustRatioPM10 = std(PM10RatioValuesNumeric);
+    seFeDustRatioPM10 = std(PM10RatioValuesNumeric) / sqrt(length(PM10RatioValuesNumeric));
 
     % Store the ratios
     FeDustRatioPM25avg(i) = avgFeDustRatioPM25;
-    FeDustRatioPM25sd(i) = sdFeDustRatioPM25;
+    FeDustRatioPM25sd(i) = seFeDustRatioPM25;
     FeDustRatioPM10avg(i) = avgFeDustRatioPM10;
-    FeDustRatioPM10sd(i) = sdFeDustRatioPM10;
+    FeDustRatioPM10sd(i) = seFeDustRatioPM10;
 
     % Write the results for the current site to the text file
-    fprintf(fid, '%s\t%f\t%f\t%f\t%f\n', siteName, avgFeDustRatioPM25, sdFeDustRatioPM25, avgFeDustRatioPM10, sdFeDustRatioPM10, avgDustPM25);
+    fprintf(fid, '%s\t%f\t%f\t%f\t%f\n', siteName, avgFeDustRatioPM25, seFeDustRatioPM25, avgFeDustRatioPM10, seFeDustRatioPM10, avgDustPM25);
 end
 
 % Close the text file
@@ -266,7 +264,7 @@ xlabel('Site', 'FontSize', 18);
 ylabel('Fe Fraction of Dust', 'FontSize', 18);
 
 % Define the custom position for the legend
-legendPosition = [0.75, 0.76, 0.15, 0.05]; % [x, y, width, height]
+legendPosition = [0.73, 0.802, 0.15, 0.03]; % [x, y, width, height]
 
 % Modify the legend position
 legend('PM_{2.5}', 'PM_{10}', 'FontSize', 18, 'LineWidth', 0.5, 'EdgeColor', 'none');
@@ -281,7 +279,7 @@ ax.YAxis.TickLength = [0, 0]; % both left ticks and right ticks are regarded as 
 % ax.YAxis(1).TickLength = [0, 0];  % Hide left ticks
 
 % Set a fixed length for the y-axis
-ylim([0, 0.2]);
+ylim([0, 0.13]);
 
 hold off;
 
@@ -294,5 +292,5 @@ paperSize = [15, 6]; % Width and height in inches
 set(gcf, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, paperSize]);
 
 % Export the plot as JPEG
-exportPath = '/Users/renyuxuan/Desktop/Pie_dust/FeDust_ratio/Fe_Dust_ratio.jpg';
+exportPath = '/Users/renyuxuan/Desktop/Pie_dust/FeDust_ratio/Fe_Dust_ratio_updated.jpg';
 print(gcf, exportPath, '-djpeg', '-r300');
