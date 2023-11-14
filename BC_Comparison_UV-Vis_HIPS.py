@@ -222,7 +222,7 @@ plt.ylabel('HIPS Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname
 
 # show the plot
 plt.tight_layout()
-plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
+# plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
 plt.show()
 
 
@@ -330,5 +330,5 @@ fig.tight_layout()
 fig.subplots_adjust(bottom=0.12, left=0.06)
 
 # Save the combined plot as an image (optional)
-plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_by_Site.tiff"), format="tiff", dpi=300)
+# plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_by_Site.tiff"), format="tiff", dpi=300)
 plt.show()
