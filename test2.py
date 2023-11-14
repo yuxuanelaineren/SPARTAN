@@ -1,17 +1,41 @@
 import os
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import pandas as pd
 import seaborn as sns
 from scipy import stats
 import numpy as np
 
-################################################################################################
+def get_tick_interval(data_range):
+    """
+    Calculate a reasonable tick interval based on the data range.
+
+    Parameters:
+    - data_range: The range of the data.
+
+    Returns:
+    - tick_interval: The calculated tick interval.
+    """
+    # Define the conditions and corresponding intervals
+    conditions = [0.5 * 5, 1 * 5, 2 * 5, 5 * 5]
+    intervals = [0.5, 1, 2, 5]
+
+    # Find the appropriate interval based on the conditions
+    for condition, interval in zip(conditions, intervals):
+        if data_range < condition:
+            tick_interval = interval
+            break
+    else:
+        # If none of the conditions are met, default to the last interval
+        tick_interval = intervals[-1]
+
+    return tick_interval
+
 # Set the directory path
 HIPS_dir_path = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 UV_dir_path = '/Users/renyuxuan/Desktop/Research/Black_Carbon/Analysis-10May2023_Joshin/Results/'
 Out_dir_path = '/Users/renyuxuan/Desktop/Research/Black_Carbon/UV-Vis_HIPS_Comparison/'
 
-#################### create scatter plot for each site as subplot
 # Read the file
 merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
 
@@ -23,105 +47,104 @@ merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
 merged_df.rename(columns={"BC_UV-Vis_(ug/m3)": "UV-Vis"}, inplace=True)
 
 # Get a list of all unique site names
-site_names = merged_df['Site'].unique()
+site_names = merged_df['City'].unique()
 
-# Count the number of non-empty plots
-num_plots = 0
-for site_name in site_names:
-    site_data = merged_df.loc[merged_df['Site'] == site_name]
-    if len(site_data) >= 2:
-        num_plots += 1
+# Set the number of columns for the combined plot
+num_columns = 7
 
-# Adjust number of rows and columns based on number of non-empty plots
-Num_Cols = 7
-Num_Rows = int(np.ceil(num_plots / Num_Cols))
-Fig_Size = (25, 10)
+# Calculate the number of rows needed
+num_rows = int(np.ceil(len(site_names) / num_columns))
 
-# Create a figure with subplots for each site
-fig, axs = plt.subplots(Num_Rows, Num_Cols, figsize=Fig_Size, sharex=True, sharey=True)
+# Create a figure and axis with the specified layout
+fig, axes = plt.subplots(num_rows, num_columns, figsize=(16, 2 * num_rows))
 
-# Create scatter plots for each site
-sns.set(font='Arial')
-plot_idx = 0
-for site_name in site_names:
+# Flatten the axes array to simplify iteration
+axes = axes.flatten()
+
+# Loop through each subplot and plot the data for the corresponding site
+for i, site_name in enumerate(site_names):
     # Get the data for the current site
-    site_data = merged_df.loc[merged_df['Site'] == site_name]
+    site_data = merged_df.loc[merged_df['City'] == site_name]
 
     # Skip site if no data points
     if len(site_data) < 2:
         continue
 
-    # Determine the row and column indices for the current plot
-    row_idx = plot_idx // Num_Cols
-    col_idx = plot_idx % Num_Cols
-
-    # Create subplot for site
-    ax = axs[row_idx, col_idx]
-    plot_idx += 1
-
-    # Create scatter plot
-    scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=site_data, s=15, alpha=1, ax=ax)
+    # Create scatter plot on the current subplot
+    scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=site_data, s=15, alpha=1, ax=axes[i])
     scatterplot.set_facecolor('white')
     border_width = 1
     for spine in scatterplot.spines.values():
         spine.set_edgecolor('black')
         spine.set_linewidth(border_width)
-    scatterplot.grid(False)  # remove the grid
-
-    # Show x and y ticks for the current subplot
-    scatterplot.tick_params(axis='both', which='both', labelsize=10, length=4)
-    scatterplot.xaxis.set_tick_params(labelbottom=True)
-    scatterplot.yaxis.set_tick_params(labelleft=True)
+    scatterplot.grid(False)
 
     # Set axis limits for the current subplot
-    ax.set_xlim([min(site_data[['UV-Vis', 'HIPS']].min().min(), 0) - 0.5,
-                 max(site_data[['UV-Vis', 'HIPS']].max().max(), 0) + 0.5])
-    ax.set_ylim([min(site_data[['UV-Vis', 'HIPS']].min().min(), 0) - 0.5,
-                 max(site_data[['UV-Vis', 'HIPS']].max().max(), 0) + 0.5])
+    x_min, x_max = site_data[['UV-Vis', 'HIPS']].min().min() - 0.2, site_data[['UV-Vis', 'HIPS']].max().max() + 0.5
+    y_min, y_max = site_data[['UV-Vis', 'HIPS']].min().min() - 0.2, site_data[['UV-Vis', 'HIPS']].max().max() + 0.5
+    axes[i].set_xlim(x_min, x_max)
+    axes[i].set_ylim(y_min, y_max)
+
+    # Calculate reasonable tick intervals based on the range of data
+    x_range = x_max - x_min
+    y_range = y_max - y_min
+    x_ticks_interval = get_tick_interval(x_range)
+    y_ticks_interval = get_tick_interval(y_range)
+
+    # Set x and y ticks with calculated interval
+    scatterplot.xaxis.set_major_locator(MultipleLocator(x_ticks_interval))
+    scatterplot.yaxis.set_major_locator(MultipleLocator(y_ticks_interval))
+
+    # Set tick labels font to Arial
+    scatterplot.set_xticks(scatterplot.get_xticks())
+    scatterplot.set_xticklabels(scatterplot.get_xticks(), fontdict={'fontname': 'Arial', 'fontsize': 8})
+    scatterplot.set_yticks(scatterplot.get_yticks())
+    scatterplot.set_yticklabels(scatterplot.get_yticks(), fontdict={'fontname': 'Arial', 'fontsize': 8})
 
     # Add 1:1 line with grey dash
-    ax.plot([min(site_data[['UV-Vis', 'HIPS']].min().min(), 0), max(site_data[['UV-Vis', 'HIPS']].max().max(), 0)],
-            [min(site_data[['UV-Vis', 'HIPS']].min().min(), 0), max(site_data[['UV-Vis', 'HIPS']].max().max(), 0)],
-            color='grey', linestyle='--', linewidth=1)
+    axes[i].plot([x_min, x_max], [y_min, y_max], color='grey', linestyle='--', linewidth=1)
 
-    # Add number of data points to the plot
+    # Add the number of data points to the plot
     num_points = len(site_data)
-    ax.text(0.05, 0.65, f'N = {num_points}', transform=ax.transAxes, fontsize=12)
+    axes[i].text(0.05, 0.65, f'N = {num_points}', transform=axes[i].transAxes, fontsize=8)
 
     # Perform linear regression with NaN handling
     mask = ~np.isnan(site_data['UV-Vis']) & ~np.isnan(site_data['HIPS'])
     slope, intercept, r_value, p_value, std_err = stats.linregress(site_data['UV-Vis'][mask], site_data['HIPS'][mask])
+
     # Check for NaN in results
     if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
         print("Linear regression results contain NaN values. Check the input data.")
     else:
         # Add linear regression line and text
         sns.regplot(x='UV-Vis', y='HIPS', data=site_data, scatter=False, ci=None,
-                    line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1}, ax=ax)
+                    line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1}, ax=axes[i])
+
         # Change the sign of the intercept for display
-        intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-        intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
-        # Update the text line with the adjusted intercept
-        ax.text(0.05, 0.7, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-                 transform=plt.gca().transAxes, fontsize=12)
+        intercept_display = abs(intercept)
+        intercept_sign = '-' if intercept < 0 else '+'
+        axes[i].text(0.05, 0.75, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+                     transform=axes[i].transAxes, fontsize=8)
 
     # Set plot title as site name
-    ax.set_title(site_name, fontname='Arial', fontsize=12, y=1.03)
+    axes[i].set_title(site_name, fontname='Arial', fontsize=10)
 
-# Loop through subplots and remove x and y labels
-for ax in axs.flat:
-    ax.set_xlabel('')
-    ax.set_ylabel('')
+    # Set x and y labels for the subplot
+    axes[i].set_xlabel('')
+    axes[i].set_ylabel('')
+    # axes[i].set_xlabel('UV-Vis Black Carbon (µg/m$^3$)', fontsize=8, fontname='Arial')
+    # axes[i].set_ylabel('HIPS Black Carbon (µg/m$^3$)', fontsize=8, fontname='Arial')
 
 # set x and y labels above the subplots
-fig.text(0.5, 0.05, 'UV-Vis Black Carbon(µg/m$^3$)', ha='center', va='center', fontsize=14)
-fig.text(0.05, 0.5, 'HIPS Black Carbon (µg/m$^3$)', ha='center', va='center', rotation='vertical', fontsize=14)
+fig.text(0.5, 0.05, 'UV-Vis Black Carbon (µg/m$^3$)', ha='center', va='center', fontsize=14, fontname='Arial')
+fig.text(0.03, 0.5, 'HIPS Black Carbon (µg/m$^3$)', ha='center', va='center', rotation='vertical', fontsize=14, fontname='Arial')
 
 # Adjust vertical distance among subplots
-fig.subplots_adjust(hspace=0.4)
 fig.tight_layout()
-fig.subplots_adjust(left=0.1)
-fig.subplots_adjust(bottom=0.1)
 
-# plt.savefig("/Users/renyuxuan/Desktop/Research/RCFM/OM_RM_positive_each_site.tiff", format="TIFF", dpi=300)
+# Adjust the figure size to accommodate the common x and y labels
+fig.subplots_adjust(bottom=0.12, left=0.06)
+
+# Save the combined plot as an image (optional)
+plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_by_Site.tiff"), format="tiff", dpi=300)
 plt.show()
