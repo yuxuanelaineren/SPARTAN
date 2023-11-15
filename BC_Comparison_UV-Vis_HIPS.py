@@ -105,7 +105,7 @@ UV_df.rename(columns={"Location ID": "Site"}, inplace=True)
 # Count the number of rows for each site
 UV_count = UV_df.groupby('Site').size().reset_index(name='UV_count')
 
-# # Merge data and calculate BC concentrations
+# # Merge data and calculate BC mass, concentrations, and fractions
 # Merge DataFrames
 merged_df = pd.merge(UV_df, HIPS_df, on=["FilterID"], how='inner')
 
@@ -115,9 +115,16 @@ merged_df['f_BC'] = pd.to_numeric(merged_df['f_BC'], errors='coerce')
 merged_df['mass_ug'] = pd.to_numeric(merged_df['mass_ug'], errors='coerce')
 merged_df['Volume_m3'] = pd.to_numeric(merged_df['Volume_m3'], errors='coerce')
 
+# Calculate BC mass
+merged_df['BC_UV-Vis_ug'] = merged_df['f_BC'] * merged_df['mass_ug']
+
 # Calculate BC concentrations
 merged_df['BC_HIPS_(ug/m3)'] = merged_df['BC_HIPS_ug'] / merged_df['Volume_m3']
 merged_df['BC_UV-Vis_(ug/m3)'] = merged_df['f_BC'] * merged_df['mass_ug'] / merged_df['Volume_m3']
+
+# Calculate BC fractions
+merged_df.rename(columns={"f_BC": "f_BC_UV-Vis"}, inplace=True)
+merged_df['f_BC_HIPS'] = merged_df['BC_HIPS_ug'] / merged_df['mass_ug']
 
 # Drop the "Site_y" column
 merged_df.drop("Site_y", axis=1, inplace=True)
@@ -158,7 +165,7 @@ with pd.ExcelWriter(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx")
 merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
 
 # Drop rows where f_BC is greater than 1
-merged_df = merged_df.loc[merged_df['f_BC'] <= 1]
+merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
 
 # Rename to simplify coding
 merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
@@ -183,7 +190,7 @@ legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.45), loc='center 
 legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('Comparison of Black Carbon Measured by HIPS and UV-Vis', fontname='Arial', fontsize=16, y=1.03)
+plt.title('Comparison of Black Carbon Concentration Measured by HIPS and UV-Vis', fontname='Arial', fontsize=14, y=1.03)
 plt.xlim([merged_df['HIPS'].min()-0.5, 35])
 plt.ylim([merged_df['HIPS'].min()-0.5, 35])
 plt.xticks([0, 10, 20, 30], fontname='Arial', size=14)
@@ -217,18 +224,28 @@ else:
     plt.text(0.05, 0.85, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
              transform=plt.gca().transAxes, fontsize=14)
 
-plt.xlabel('UV-Vis Black Carbon(µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
-plt.ylabel('HIPS Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
+plt.xlabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
+plt.ylabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
+# plt.savefig(os.path.join(Out_dir_path, "BC_Concentration_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
 plt.show()
 
 
 ################################################################################################
 # Create scatter plot for each site
 ################################################################################################
+
+# Read the file
+merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
+
+# Drop rows where f_BC is greater than 1
+merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
+
+# Rename to simplify coding
+merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
+merged_df.rename(columns={"BC_UV-Vis_(ug/m3)": "UV-Vis"}, inplace=True)
 
 # Get a list of all unique site names
 site_names = merged_df['City'].unique()
@@ -279,11 +296,13 @@ for i, site_name in enumerate(site_names):
     scatterplot.xaxis.set_major_locator(MultipleLocator(x_ticks_interval))
     scatterplot.yaxis.set_major_locator(MultipleLocator(y_ticks_interval))
 
-    # Set tick labels font to Arial
+    # Set x and y tick labels with a specific number of digits
     scatterplot.set_xticks(scatterplot.get_xticks())
-    scatterplot.set_xticklabels(scatterplot.get_xticks(), fontdict={'fontname': 'Arial', 'fontsize': 8})
+    scatterplot.set_xticklabels([f'{tick:.2f}' for tick in scatterplot.get_xticks()],
+                                fontdict={'fontname': 'Arial', 'fontsize': 8})
     scatterplot.set_yticks(scatterplot.get_yticks())
-    scatterplot.set_yticklabels(scatterplot.get_yticks(), fontdict={'fontname': 'Arial', 'fontsize': 8})
+    scatterplot.set_yticklabels([f'{tick:.2f}' for tick in scatterplot.get_yticks()],
+                                fontdict={'fontname': 'Arial', 'fontsize': 8})
 
     # Add 1:1 line with grey dash
     axes[i].plot([x_min, x_max], [y_min, y_max], color='grey', linestyle='--', linewidth=1)
@@ -316,12 +335,12 @@ for i, site_name in enumerate(site_names):
     # Set x and y labels for the subplot
     axes[i].set_xlabel('')
     axes[i].set_ylabel('')
-    # axes[i].set_xlabel('UV-Vis Black Carbon (µg/m$^3$)', fontsize=8, fontname='Arial')
-    # axes[i].set_ylabel('HIPS Black Carbon (µg/m$^3$)', fontsize=8, fontname='Arial')
+    # axes[i].set_xlabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=8, fontname='Arial')
+    # axes[i].set_ylabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=8, fontname='Arial')
 
 # set x and y labels above the subplots
-fig.text(0.5, 0.05, 'UV-Vis Black Carbon (µg/m$^3$)', ha='center', va='center', fontsize=14, fontname='Arial')
-fig.text(0.03, 0.5, 'HIPS Black Carbon (µg/m$^3$)', ha='center', va='center', rotation='vertical', fontsize=14, fontname='Arial')
+fig.text(0.5, 0.05, 'UV-Vis Black Carbon Concentration (µg/m$^3$)', ha='center', va='center', fontsize=14, fontname='Arial')
+fig.text(0.03, 0.5, 'HIPS Black Carbon Concentration (µg/m$^3$)', ha='center', va='center', rotation='vertical', fontsize=14, fontname='Arial')
 
 # Adjust vertical distance among subplots
 fig.tight_layout()
@@ -330,5 +349,72 @@ fig.tight_layout()
 fig.subplots_adjust(bottom=0.12, left=0.06)
 
 # Save the combined plot as an image (optional)
-# plt.savefig(os.path.join(Out_dir_path, "BC_Comparison_by_Site.tiff"), format="tiff", dpi=300)
+# plt.savefig(os.path.join(Out_dir_path, "BC_Concentration_Comparison_by_Site.tiff"), format="tiff", dpi=300)
+plt.show()
+
+################################################################################################
+# Investigate diff in BC mass v.s. PM mass
+################################################################################################
+# Read the file
+merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
+
+# Calculate the difference in BC mass
+merged_df['diff_ug'] = merged_df['BC_UV-Vis_ug'] - merged_df['BC_HIPS_ug']
+
+# Calculate the difference in BC fraction
+# merged_df['diff'] = merged_df['f_BC_UV-Vis'] - merged_df['f_BC_HIPS']
+
+# Drop rows where f_BC is greater than 1
+merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
+
+# Drop rows where mass_ug is greater than 200
+merged_df = merged_df.loc[merged_df['mass_ug'] <= 200]
+
+# Rename to simplify coding
+merged_df.rename(columns={"diff_ug": "diff"}, inplace=True)
+merged_df.rename(columns={"mass_ug": "mass"}, inplace=True)
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(15, 6))
+
+# Set x-axis to logarithmic scale
+# ax.set_xscale('log')
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='mass', y='diff', data=merged_df, hue='City', s=25, alpha=1, ax=ax)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Modify legend background color and position
+legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.45), loc='center left', fontsize=12)
+# legend.get_frame().set_linewidth(0.0)  # remove legend border
+legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
+
+# Set title, xlim, ylim, ticks, labels
+plt.title('Difference in Black Carbon Mass Measured by UV-Vis and HIPS v.s. PM Mass', fontname='Arial', fontsize=14, y=1.03)
+plt.xlim([merged_df['mass'].min() - 2, merged_df['mass'].max() + 2])
+plt.ylim([merged_df['diff'].min() - 2, merged_df['diff'].max() + 2])
+plt.xticks(fontname='Arial', size=14)
+plt.yticks(fontname='Arial', size=14)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add reference line at y = 0
+# Add reference line at y = 0
+ax.axhline(y=0, color='grey', linestyle='--', linewidth=1)
+
+# Add number of data points to the plot
+num_points = len(merged_df)
+plt.text(0.05, 0.20, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
+plt.xlabel('PM Mass (µg)', fontsize=14, color='black', fontname='Arial')
+plt.ylabel('Δ Black Carbon Mass (UV-Vis - HIPS) (µg)', fontsize=14, color='black', fontname='Arial')
+
+# show the plot
+plt.tight_layout()
+plt.savefig(os.path.join(Out_dir_path, "Diff_BC_Mass_PM_Mass_200.tiff"), format="TIFF", dpi=300)
 plt.show()
