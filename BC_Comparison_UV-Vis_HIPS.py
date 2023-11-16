@@ -5,7 +5,7 @@ import pandas as pd
 import seaborn as sns
 from scipy import stats
 import numpy as np
-
+from pandas.tseries.offsets import DateOffset
 ################################################################################################
 def get_tick_interval(data_range):
     """
@@ -62,7 +62,7 @@ for filename in os.listdir(HIPS_dir_path):
         # print(f"Columns in {filename}: {master_data.columns}")
 
         # Specify the required columns
-        HIPS_columns = ['FilterID', 'mass_ug', 'Volume_m3', 'BC_SSR_ug', 'BC_HIPS_ug']
+        HIPS_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3', 'BC_SSR_ug', 'BC_HIPS_ug']
 
         # Check if all required columns are present
         if all(col in master_data.columns for col in HIPS_columns):
@@ -70,6 +70,17 @@ for filename in os.listdir(HIPS_dir_path):
             master_data.columns = master_data.columns.str.strip()
             # Select the specified columns
             HIPS_df = master_data[HIPS_columns].copy()
+
+            # Convert the relevant columns to numeric to handle any non-numeric values
+            HIPS_df['Mass_type'] = pd.to_numeric(HIPS_df['Mass_type'], errors='coerce')
+            # Drop rows where Mass_type is 3
+            HIPS_df = HIPS_df.loc[HIPS_df['Mass_type'] != 3]
+
+            # Convert 'start_year' to numeric and then to integers
+            HIPS_df['start_year'] = pd.to_numeric(HIPS_df['start_year'], errors='coerce')
+            HIPS_df['start_year'] = HIPS_df['start_year'].astype('Int64')  # 'Int64' allows for NaN values
+            # Drop rows with NaN values in the 'start_year' column
+            HIPS_df = HIPS_df.dropna(subset=['start_year'])
 
             # Extract the site name from the filename
             site_name = filename.split('_')[0]
@@ -353,26 +364,29 @@ fig.subplots_adjust(bottom=0.12, left=0.06)
 plt.show()
 
 ################################################################################################
-# Investigate diff in BC mass v.s. PM mass
+# Investigate diff in BC fraction v.s. PM mass
 ################################################################################################
 # Read the file
 merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
 
-# Calculate the difference in BC mass
-merged_df['diff_ug'] = merged_df['BC_UV-Vis_ug'] - merged_df['BC_HIPS_ug']
+# Convert 'start_year', 'start_month', and 'start_day' to datetime format
+merged_df['start_date'] = pd.to_datetime(merged_df[['start_year', 'start_month', 'start_day']].astype(str).agg('/'.join, axis=1), errors='coerce')
+# print(merged_df[['start_date']].sort_values(by='start_date'))
 
-# Calculate the difference in BC fraction
-# merged_df['diff'] = merged_df['f_BC_UV-Vis'] - merged_df['f_BC_HIPS']
+# Calculate the difference in BC fraction and mass
+merged_df['diff'] = merged_df['f_BC_UV-Vis'] - merged_df['f_BC_HIPS']
+merged_df['diff_ug'] = merged_df['BC_UV-Vis_ug'] - merged_df['BC_HIPS_ug']
 
 # Drop rows where f_BC is greater than 1
 merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
 
 # Drop rows where mass_ug is greater than 200
-merged_df = merged_df.loc[merged_df['mass_ug'] <= 200]
+# merged_df = merged_df.loc[merged_df['mass_ug'] <= 200]
 
 # Rename to simplify coding
-merged_df.rename(columns={"diff_ug": "diff"}, inplace=True)
+# merged_df.rename(columns={"diff_ug": "diff"}, inplace=True)   # only use in bc mass
 merged_df.rename(columns={"mass_ug": "mass"}, inplace=True)
+merged_df.rename(columns={"start_date": "date"}, inplace=True)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(15, 6))
@@ -395,26 +409,29 @@ legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.45), loc='center 
 # legend.get_frame().set_linewidth(0.0)  # remove legend border
 legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
 
+# Set x-axis limits with a buffer
+# buffer_days = 20
+# plt.xlim([merged_df['date'].min() - DateOffset(days=buffer_days), merged_df['date'].max() + DateOffset(days=buffer_days)])
+
 # Set title, xlim, ylim, ticks, labels
-plt.title('Difference in Black Carbon Mass Measured by UV-Vis and HIPS v.s. PM Mass', fontname='Arial', fontsize=14, y=1.03)
-plt.xlim([merged_df['mass'].min() - 2, merged_df['mass'].max() + 2])
-plt.ylim([merged_df['diff'].min() - 2, merged_df['diff'].max() + 2])
+plt.title('Difference in Black Carbon Fraction Measured by UV-Vis and HIPS v.s. PM Mass', fontname='Arial', fontsize=14, y=1.03)
+plt.xlim([merged_df['mass'].min() - 5, merged_df['mass'].max() + 5])
+plt.ylim([merged_df['diff'].min() - 0.05, merged_df['diff'].max() + 0.05])
 plt.xticks(fontname='Arial', size=14)
 plt.yticks(fontname='Arial', size=14)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Add reference line at y = 0
-# Add reference line at y = 0
 ax.axhline(y=0, color='grey', linestyle='--', linewidth=1)
 
 # Add number of data points to the plot
 num_points = len(merged_df)
-plt.text(0.05, 0.20, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
+plt.text(0.05, 0.80, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
 plt.xlabel('PM Mass (µg)', fontsize=14, color='black', fontname='Arial')
-plt.ylabel('Δ Black Carbon Mass (UV-Vis - HIPS) (µg)', fontsize=14, color='black', fontname='Arial')
+plt.ylabel('Δ Black Carbon Fraction (UV-Vis - HIPS)', fontsize=14, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-plt.savefig(os.path.join(Out_dir_path, "Diff_BC_Mass_PM_Mass_200.tiff"), format="TIFF", dpi=300)
+# plt.savefig(os.path.join(Out_dir_path, "Diff_BC_Fraction_PM_Mass.tiff"), format="TIFF", dpi=300)
 plt.show()
