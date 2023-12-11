@@ -73,8 +73,8 @@ for filename in os.listdir(HIPS_dir_path):
 
             # Convert the relevant columns to numeric to handle any non-numeric values
             HIPS_df['Mass_type'] = pd.to_numeric(HIPS_df['Mass_type'], errors='coerce')
-            # Drop rows where Mass_type is 3
-            HIPS_df = HIPS_df.loc[HIPS_df['Mass_type'] != 3]
+            # Select PM2.5, rows where Mass_type is 1
+            HIPS_df = HIPS_df.loc[HIPS_df['Mass_type'] == 1]
 
             # Convert 'start_year' to numeric and then to integers
             HIPS_df['start_year'] = pd.to_numeric(HIPS_df['start_year'], errors='coerce')
@@ -85,7 +85,7 @@ for filename in os.listdir(HIPS_dir_path):
             # Extract the site name from the filename
             site_name = filename.split('_')[0]
             # Add the site name as a column in the selected data
-            HIPS_df.loc[:, "Site"] = site_name  # safer to use .loc
+            HIPS_df["Site"] = [site_name] * len(HIPS_df)
 
             # Count the number of rows
             row_count = HIPS_df.shape[0]
