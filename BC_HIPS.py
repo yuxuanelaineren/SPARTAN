@@ -54,6 +54,9 @@ for filename in os.listdir(HIPS_dir_path):
             # Add the site name as a column in the selected data
             HIPS_df["Site"] = [site_name] * len(HIPS_df)
 
+            # Drop rows where 'BC_HIPS_ug' is NaN
+            HIPS_df = HIPS_df.dropna(subset=['BC_HIPS_ug'])
+
             # Count the number of rows
             row_count = HIPS_df.shape[0]
             # Add the row count to the dictionaries
