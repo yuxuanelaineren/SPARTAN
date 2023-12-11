@@ -6,6 +6,14 @@ HIPS_dir_path = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_fi
 Site_dir_path = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 Out_dir_path = '/Users/renyuxuan/Desktop/Research/Black_Carbon/UV-Vis_HIPS_Comparison/'
 
+
+################################################################################################
+# Calculate statistics for HIPS dataset, set site as country and city
+################################################################################################
+
+
+
+
 ################################################################################################
 # Calculate statistics for HIPS dataset, set site as country and city
 ################################################################################################
