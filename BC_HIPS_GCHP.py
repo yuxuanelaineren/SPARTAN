@@ -336,7 +336,7 @@ for mon in range(1, 13):
     colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
     colorbar.ax.tick_params(axis='y', labelsize=10)
     plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
-    plt.show()
+    # plt.show()
 ################################################################################################
 # Compare BC/PM and BC/SO4
 ################################################################################################

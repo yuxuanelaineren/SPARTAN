@@ -66,7 +66,7 @@ for filename in os.listdir(obs_dir):
             # Drop rows with NaN values
             HIPS_df = HIPS_df.dropna(subset=['start_year'])
             HIPS_df = HIPS_df.dropna(subset=['Volume_m3'])
-            HIPS_df = HIPS_df.dropna(subset=['mass_ug'])
+            HIPS_df = HIPS_df.dropna(subset=['mass_ug']) # Don't forget to change
 
             # Extract the site name from the filename
             site_name = filename.split('_')[0]
@@ -135,7 +135,7 @@ for mon in range(1, 13):
     sim_lon = np.array(sim_df.lons).astype('float32')
     sim_lon[sim_lon > 180] -= 360
     sim_lat = np.array(sim_df.lats).astype('float32')
-    sim_conc = np.array(sim_df['PM25'])  # Don't forget to change
+    sim_conc = np.array(sim_df[species])
     buffer = 10
 
     # Drop NaN and infinite values from obs_conc
@@ -146,7 +146,7 @@ for mon in range(1, 13):
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
-    obs_conc = obs_df['PM25']  # Don't forget to change
+    obs_conc = obs_df[species]
     # obs_BC_PM25 = obs_df['BC_PM25_ratio']
     # obs_BC_SO4 = obs_df['BC_SO4_ratio']
 
@@ -286,13 +286,15 @@ for mon in range(1, 13):
     cmap = WhGrYlRd
     cmap_reversed = cmap
 
+    vmax = 150  # 28 for BC, 200 for PM25, 15 for SO4
+
     # Plot data for each face
     for face in range(6):
         x = sim_df.corner_lons.isel(nf=face)
         y = sim_df.corner_lats.isel(nf=face)
         v = sim_df[species].isel(nf=face)
 
-        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=100)
+        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
     # Read comparison data
     compar_filename = f'{cres}_LUO_Sim_vs_SPARTAN_{species}_{year}{mon:02d}_MonMean.csv'
@@ -306,9 +308,9 @@ for mon in range(1, 13):
 
     # Create scatter plot
     im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=200, zorder=4)  # max  = 28
+                    linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
     im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=200, zorder=3)
+                    linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
 
     # Calculate the global mean of simulated and observed data
     global_mean_sim = round(np.nanmean(sim), 1)
@@ -326,7 +328,7 @@ for mon in range(1, 13):
 
     # Plot title and colorbar
     plt.title(f'PM$_{{2.5}}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
-              fontsize=14, fontname='Arial')
+              fontsize=14, fontname='Arial') # PM$_{{2.5}}$
     colorbar = plt.colorbar(im, label=f'{species} concentration (µg/m$^3$)',
                             orientation="vertical", pad=0.05, fraction=0.02)
     num_ticks = 5  # Adjust this value as needed
