@@ -19,7 +19,7 @@ from matplotlib import font_manager
 
 cres = 'C360'
 year = 2018
-species = 'PM25'
+species = 'BC_SO4'
 
 # Set the directory path
 sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
@@ -66,7 +66,8 @@ for filename in os.listdir(obs_dir):
             # Drop rows with NaN values
             HIPS_df = HIPS_df.dropna(subset=['start_year'])
             HIPS_df = HIPS_df.dropna(subset=['Volume_m3'])
-            HIPS_df = HIPS_df.dropna(subset=['mass_ug']) # Don't forget to change
+            HIPS_df = HIPS_df.dropna(subset=['BC_HIPS_ug']) # Don't forget to change
+            HIPS_df = HIPS_df.dropna(subset=['IC_SO4_ug']) # Don't forget to change
 
             # Extract the site name from the filename
             site_name = filename.split('_')[0]
@@ -92,8 +93,8 @@ for site, count in site_counts.items():
 HIPS_df['BC'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['Volume_m3']
 HIPS_df['PM25'] = HIPS_df['mass_ug'] / HIPS_df['Volume_m3']
 HIPS_df['SO4'] = HIPS_df['IC_SO4_ug'] / HIPS_df['Volume_m3']
-HIPS_df['BC_PM25_ratio'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
-HIPS_df['BC_SO4_ratio'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
+HIPS_df['BC_PM25'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
+HIPS_df['BC_SO4'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
 
 # Read Site name and lon/lat from Site_detail.xlsx
 site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
@@ -118,7 +119,7 @@ monthly_data = []
 # Loop through each month
 for mon in range(1, 13):
     # Load simulation and observation data
-    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4')
     obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
@@ -135,20 +136,21 @@ for mon in range(1, 13):
     sim_lon = np.array(sim_df.lons).astype('float32')
     sim_lon[sim_lon > 180] -= 360
     sim_lat = np.array(sim_df.lats).astype('float32')
+
+    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
     sim_conc = np.array(sim_df[species])
     buffer = 10
 
     # Drop NaN and infinite values from obs_conc
     obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
-    # obs_df = obs_df.dropna(subset=['BC_conc'])
+    obs_df = obs_df.dropna(subset=[species], thresh=1)
 
     # Extract lon/lat, BC, BC/PM, and BC/SO4 from observation data
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
     obs_conc = obs_df[species]
-    # obs_BC_PM25 = obs_df['BC_PM25_ratio']
-    # obs_BC_SO4 = obs_df['BC_SO4_ratio']
 
     # Find the nearest simulation lat/lon neighbors for each observation
     match_obs_lon = np.zeros(len(obs_lon))
@@ -259,7 +261,7 @@ with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.form
 # Save annual CSV file
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)
 # annual_df.to_csv(annual_file, index=False)  # Set index=False to avoid writing row indices to the CSV file
-
+sim_df.close()
 
 ################################################################################################
 # Map SPARTAN and GCHP data
@@ -268,6 +270,8 @@ with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.form
 for mon in range(1, 13):
     # Plot map using simulation data
     sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
 
     plt.style.use('default')
     plt.figure(figsize=(10, 5))
@@ -286,7 +290,7 @@ for mon in range(1, 13):
     cmap = WhGrYlRd
     cmap_reversed = cmap
 
-    vmax = 150  # 28 for BC, 200 for PM25, 15 for SO4
+    vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
     # Plot data for each face
     for face in range(6):
@@ -313,29 +317,30 @@ for mon in range(1, 13):
                     linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
 
     # Calculate the global mean of simulated and observed data
-    global_mean_sim = round(np.nanmean(sim), 1)
-    global_mean_obs = round(np.nanmean(obs), 1)
-    global_std_sim = round(np.nanstd(sim), 1)
-    global_std_obs = round(np.nanstd(obs), 1)
+    global_mean_sim = np.nanmean(sim)
+    global_mean_obs = np.nanmean(obs)
+    global_std_sim = np.nanstd(sim)
+    global_std_obs = np.nanstd(obs)
 
     # Display statistics as text annotations on the plot
     month_str = calendar.month_name[mon]
-    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.1f} ± {global_std_sim:.1f} µg/m$^3$',
+    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.1f} ± {global_std_obs:.1f} µg/m$^3$',
+    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
     ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
     # Plot title and colorbar
-    plt.title(f'PM$_{{2.5}}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
+    plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
               fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-    colorbar = plt.colorbar(im, label=f'{species} concentration (µg/m$^3$)',
-                            orientation="vertical", pad=0.05, fraction=0.02)
-    num_ticks = 5  # Adjust this value as needed
+    # plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+    colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
+    num_ticks = 5
     colorbar.locator = plt.MaxNLocator(num_ticks)
     colorbar.update_ticks()
     font_properties = font_manager.FontProperties(family='Arial', size=12)
-    colorbar.set_label(f'PM$_{{2.5}}$ concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+    colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+    # colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
     colorbar.ax.tick_params(axis='y', labelsize=10)
     plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
     # plt.show()

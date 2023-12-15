@@ -16,10 +16,12 @@ import geopandas as gpd
 from shapely.geometry import Point
 from shapely.ops import nearest_points
 from matplotlib import font_manager
+import seaborn as sns
+from scipy import stats
 
 cres = 'C360'
 year = 2018
-species = 'BC'
+species = 'BC_SO4'
 
 # Set the directory path
 sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
@@ -67,6 +69,7 @@ for filename in os.listdir(obs_dir):
             HIPS_df = HIPS_df.dropna(subset=['start_year'])
             HIPS_df = HIPS_df.dropna(subset=['Volume_m3'])
             HIPS_df = HIPS_df.dropna(subset=['BC_HIPS_ug']) # Don't forget to change
+            HIPS_df = HIPS_df.dropna(subset=['IC_SO4_ug']) # Don't forget to change
 
             # Extract the site name from the filename
             site_name = filename.split('_')[0]
@@ -92,8 +95,8 @@ for site, count in site_counts.items():
 HIPS_df['BC'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['Volume_m3']
 HIPS_df['PM25'] = HIPS_df['mass_ug'] / HIPS_df['Volume_m3']
 HIPS_df['SO4'] = HIPS_df['IC_SO4_ug'] / HIPS_df['Volume_m3']
-HIPS_df['BC_PM25_ratio'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
-HIPS_df['BC_SO4_ratio'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
+HIPS_df['BC_PM25'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
+HIPS_df['BC_SO4'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
 
 # Read Site name and lon/lat from Site_detail.xlsx
 site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
@@ -118,7 +121,7 @@ monthly_data = []
 # Loop through each month
 for mon in range(1, 13):
     # Load simulation and observation data
-    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4')
     obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
@@ -135,20 +138,21 @@ for mon in range(1, 13):
     sim_lon = np.array(sim_df.lons).astype('float32')
     sim_lon[sim_lon > 180] -= 360
     sim_lat = np.array(sim_df.lats).astype('float32')
-    sim_conc = np.array(sim_df['BC'])  # Don't forget to change
+
+    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
+    sim_conc = np.array(sim_df[species])
     buffer = 10
 
     # Drop NaN and infinite values from obs_conc
     obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
-    # obs_df = obs_df.dropna(subset=['BC_conc'])
+    obs_df = obs_df.dropna(subset=[species], thresh=1)
 
     # Extract lon/lat, BC, BC/PM, and BC/SO4 from observation data
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
-    obs_conc = obs_df['BC']  # Don't forget to change
-    # obs_BC_PM25 = obs_df['BC_PM25_ratio']
-    # obs_BC_SO4 = obs_df['BC_SO4_ratio']
+    obs_conc = obs_df[species]
 
     # Find the nearest simulation lat/lon neighbors for each observation
     match_obs_lon = np.zeros(len(obs_lon))
@@ -259,7 +263,7 @@ with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.form
 # Save annual CSV file
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)
 # annual_df.to_csv(annual_file, index=False)  # Set index=False to avoid writing row indices to the CSV file
-
+sim_df.close()
 
 ################################################################################################
 # Map SPARTAN and GCHP data
@@ -268,6 +272,8 @@ with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.form
 for mon in range(1, 13):
     # Plot map using simulation data
     sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
 
     plt.style.use('default')
     plt.figure(figsize=(10, 5))
@@ -286,13 +292,15 @@ for mon in range(1, 13):
     cmap = WhGrYlRd
     cmap_reversed = cmap
 
+    vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+
     # Plot data for each face
     for face in range(6):
         x = sim_df.corner_lons.isel(nf=face)
         y = sim_df.corner_lats.isel(nf=face)
         v = sim_df[species].isel(nf=face)
 
-        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=100)
+        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
     # Read comparison data
     compar_filename = f'{cres}_LUO_Sim_vs_SPARTAN_{species}_{year}{mon:02d}_MonMean.csv'
@@ -306,103 +314,112 @@ for mon in range(1, 13):
 
     # Create scatter plot
     im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=10, zorder=4)  # max  = 28, 200 for PM25
+                    linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
     im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=10, zorder=3)
+                    linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
 
     # Calculate the global mean of simulated and observed data
-    global_mean_sim = round(np.nanmean(sim), 1)
-    global_mean_obs = round(np.nanmean(obs), 1)
-    global_std_sim = round(np.nanstd(sim), 1)
-    global_std_obs = round(np.nanstd(obs), 1)
+    global_mean_sim = np.nanmean(sim)
+    global_mean_obs = np.nanmean(obs)
+    global_std_sim = np.nanstd(sim)
+    global_std_obs = np.nanstd(obs)
 
     # Display statistics as text annotations on the plot
     month_str = calendar.month_name[mon]
-    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.1f} ± {global_std_sim:.1f} µg/m$^3$',
+    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.1f} ± {global_std_obs:.1f} µg/m$^3$',
+    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
     ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
     # Plot title and colorbar
-    plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
+    plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
               fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-    colorbar = plt.colorbar(im, label=f'{species} concentration (µg/m$^3$)',
-                            orientation="vertical", pad=0.05, fraction=0.02)
-    num_ticks = 5  # Adjust this value as needed
+    # plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+    colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
+    num_ticks = 5
     colorbar.locator = plt.MaxNLocator(num_ticks)
     colorbar.update_ticks()
     font_properties = font_manager.FontProperties(family='Arial', size=12)
-    colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+    colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+    # colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
     colorbar.ax.tick_params(axis='y', labelsize=10)
-    plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
-    # plt.show()
-################################################################################################
-# Compare BC/PM and BC/SO4
-################################################################################################
-for mon in range(1, 2):
-    # Plot map using simulation data
-    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
-
-    plt.style.use('default')
-    plt.figure(figsize=(10, 5))
-    left = 0.1  # Adjust the left position
-    bottom = 0.1  # Adjust the bottom position
-    width = 0.8  # Adjust the width
-    height = 0.8  # Adjust the height
-    ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
-    ax.coastlines()
-    ax.set_global()
-    ax.add_feature(cfeature.BORDERS)
-
-    ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())  # World map without Arctic and Antarctic region
-
-    # Define the colormap
-    cmap = WhGrYlRd
-    cmap_reversed = cmap
-
-    for face in range(6):
-        x = sim_df.corner_lons.isel(nf=face)
-        y = sim_df.corner_lats.isel(nf=face)
-        v = sim_df['BC'].isel(nf=face) / sim_df['PM25'].isel(nf=face)
-
-        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=100)
-
-    # Read comparison data
-    compr_BC_df = pd.read_csv(out_dir + '{}_LUO_Sim_vs_SPARTAN_BC_{}{:02d}_MonMean.csv'.format(cres, year, mon))
-    compr_PM25_df = pd.read_csv(out_dir + '{}_LUO_Sim_vs_SPARTAN_PM25_{}{:02d}_MonMean.csv'.format(cres, year, mon))
-    compr_SO4_df = pd.read_csv(out_dir + '{}_LUO_Sim_vs_SPARTAN_SO4_{}{:02d}_MonMean.csv'.format(cres, year, mon))
-    compr_BC_notna = compr_BC_df[compr_BC_df.notna().all(axis=1)]
-    compr_PM25_notna = compr_PM25_df [compr_PM25_df .notna().all(axis=1)]
-    compr_SO4_notna = compr_PM25_df [compr_SO4_df .notna().all(axis=1)]
-
-    lon = compr_BC_notna.lon
-    lat = compr_BC_notna.lat
-    obs = compr_BC_notna.obs / compr_PM25_notna.obs
-    # obs = compr_BC_notna.obs / compr_SO4_notna.obs
-    sim = compr_BC_notna.sim
-
-    # Define marker sizes
-    s1 = [20] * len(obs)  # inner circle: Observation
-    s2 = [70] * len(obs)  # Outer ring: Simulation
-    # Create scatter plot
-    im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=30, zorder=2) # max  = 15
-    im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=30, zorder=1)
-
-    # Calculate the global mean of simulated and observed data
-    global_mean_sim = round(np.nanmean(sim), 1)
-    global_mean_obs = round(np.nanmean(obs), 1)
-
-    month_str = calendar.month_name[mon]
-    ax.text(0.4, 0.12, 'Sim = {:.1f}'.format(global_mean_sim) + ' µg/m$^3$', fontsize=12, fontname='Arial',
-            transform=ax.transAxes)
-    ax.text(0.4, 0.05, 'Obs = {:.1f}'.format(global_mean_obs) + ' µg/m$^3$', fontsize=12, fontname='Arial',
-            transform=ax.transAxes)
-    ax.text(0.02, 0.05, '{}, 2018'.format(month_str), fontsize=12, fontname='Arial', transform=ax.transAxes)
-
-    plt.title('BC/PM25 Comparison: GCHP-v13.4.1 {} vs SPARTAN'.format(cres.lower()), fontsize=14, fontname='Arial')
-    plt.colorbar(im, label="BC/PM25", orientation="vertical", pad=0.05, fraction=0.02)
-    # plt.savefig(OutDir + '{}_Sim vs_SPARTAN_{}_{:02d}_MonMean.png'.format(cres, species, mon), dpi=500)
+    # plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
     plt.show()
+
+################################################################################################
+# Create scatter plot for annual data
+################################################################################################
+# Read the file
+annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)), sheet_name='All')
+
+# Drop rows where BC is greater than 1
+annual_df = annual_df.loc[annual_df['obs'] <= 20]
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, hue='City', s=25, alpha=1, ax=ax)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Modify legend background color and position
+legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12)
+# legend.get_frame().set_linewidth(0.0)  # remove legend border
+legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
+
+# Set title, xlim, ylim, ticks, labels
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
+          fontsize=14, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+
+plt.xlim([-0.5, 16])
+plt.ylim([-0.5, 16])
+# plt.xlim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
+# plt.ylim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
+plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
+plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with black dash
+x = annual_df['obs']
+y = annual_df['obs']
+plt.plot([annual_df['sim'].min(), annual_df['sim'].max()], [annual_df['sim'].min(), annual_df['sim'].max()],
+         color='grey', linestyle='--', linewidth=1)
+
+# Add number of data points to the plot
+num_points = len(annual_df)
+plt.text(0.70, 0.3, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
+# plt.text(0.05, 0.81, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
+
+# Perform linear regression with NaN handling
+mask = ~np.isnan(annual_df['obs']) & ~np.isnan(annual_df['sim'])
+slope, intercept, r_value, p_value, std_err = stats.linregress(annual_df['obs'][mask], annual_df['sim'][mask])
+# Check for NaN in results
+if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
+    print("Linear regression results contain NaN values. Check the input data.")
+else:
+    # Add linear regression line and text
+    sns.regplot(x='obs', y='sim', data=annual_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
+    # Change the sign of the intercept for display
+    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
+    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
+
+    # Update the text line with the adjusted intercept
+    plt.text(0.70, 0.35, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+             transform=plt.gca().transAxes, fontsize=14)
+
+plt.xlabel('SPARTAN Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
+plt.ylabel('GCHP Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
+
+# show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+plt.show()
+
