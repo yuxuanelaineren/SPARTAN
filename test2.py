@@ -11,105 +11,23 @@ import pandas as pd
 from gamap_colormap import WhGrYlRd
 import calendar
 import numpy as np
+from matplotlib import font_manager
 from scipy.spatial.distance import cdist
 import geopandas as gpd
 from shapely.geometry import Point
 from shapely.ops import nearest_points
-from matplotlib import font_manager
+import seaborn as sns
+from scipy import stats
 
 cres = 'C360'
 year = 2018
-species = 'BC_SO4'
+species = 'BC'
 
 # Set the directory path
 sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}/'.format(cres.lower(), species)
-
-################################################################################################
-# Extract BC_HIPS from master file and lon/lat from site.details
-################################################################################################
-# Create an empty list to store individual HIPS DataFrames
-HIPS_dfs = []
-
-# Iterate over each file in the directory
-for filename in os.listdir(obs_dir):
-    if filename.endswith('.csv'):
-        # Read the data from the master file
-        master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
-
-        # Specify the required columns
-        HIPS_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
-                        'BC_HIPS_ug', 'IC_SO4_ug']
-        # Check if all required columns are present
-        if all(col in master_data.columns for col in HIPS_columns):
-            # Remove leading/trailing whitespaces from column names
-            master_data.columns = master_data.columns.str.strip() #Important!
-            # Select the specified columns
-            HIPS_df = master_data[HIPS_columns].copy()
-
-            # Select PM2.5, rows where Mass_type is 1
-            HIPS_df['Mass_type'] = pd.to_numeric(HIPS_df['Mass_type'], errors='coerce')
-            HIPS_df = HIPS_df.loc[HIPS_df['Mass_type'] == 1]
-
-            # Convert the relevant columns to numeric
-            HIPS_df['BC_HIPS_ug'] = pd.to_numeric(HIPS_df['BC_HIPS_ug'], errors='coerce')
-            HIPS_df['mass_ug'] = pd.to_numeric(HIPS_df['mass_ug'], errors='coerce')
-            HIPS_df['Volume_m3'] = pd.to_numeric(HIPS_df['Volume_m3'], errors='coerce')
-            HIPS_df['IC_SO4_ug'] = pd.to_numeric(HIPS_df['IC_SO4_ug'], errors='coerce')
-
-            # Convert 'start_year' to numeric and then to integers
-            # HIPS_df['start_year'] = pd.to_numeric(HIPS_df['start_year'], errors='coerce')
-            # HIPS_df['start_year'] = HIPS_df['start_year'].astype('Int64')  # 'Int64' allows for NaN values
-
-            # Drop rows with NaN values
-            HIPS_df = HIPS_df.dropna(subset=['start_year'])
-            HIPS_df = HIPS_df.dropna(subset=['Volume_m3'])
-            HIPS_df = HIPS_df.dropna(subset=['BC_HIPS_ug']) # Don't forget to change
-            HIPS_df = HIPS_df.dropna(subset=['IC_SO4_ug']) # Don't forget to change
-
-            # Extract the site name from the filename
-            site_name = filename.split('_')[0]
-            # Add the site name as a column in the selected data
-            HIPS_df["Site"] = [site_name] * len(HIPS_df)
-
-            # Append the current HIPS_df to the list
-            HIPS_dfs.append(HIPS_df)
-        else:
-            print(f"Skipping {filename} because not all required columns are present.")
-
-# Concatenate all HIPS DataFrames into a single DataFrame
-HIPS_df = pd.concat(HIPS_dfs, ignore_index=True)
-
-# Assuming your DataFrame is named obs_df
-site_counts = HIPS_df.groupby('Site')['FilterID'].count()
-
-# Print the number of rows for each site
-for site, count in site_counts.items():
-    print(f"{site}: {count} rows")
-
-# Calculate BC concentrations, fractions, and BC/Sulfate
-HIPS_df['BC'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['Volume_m3']
-HIPS_df['PM25'] = HIPS_df['mass_ug'] / HIPS_df['Volume_m3']
-HIPS_df['SO4'] = HIPS_df['IC_SO4_ug'] / HIPS_df['Volume_m3']
-HIPS_df['BC_PM25'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
-HIPS_df['BC_SO4'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
-
-# Read Site name and lon/lat from Site_detail.xlsx
-site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                        usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
-
-# Merge the dataframes based on the "Site" and "Site_Code" columns
-obs_df = pd.merge(HIPS_df, site_df, how="left", left_on="Site", right_on="Site_Code")
-
-# Drop the duplicate "Site_Code" column
-obs_df.drop("Site_Code", axis=1, inplace=True)
-
-# Write to excel file
-with pd.ExcelWriter(os.path.join(out_dir, "HIPS_SPARTAN.xlsx"), engine='openpyxl') as writer:
-    # Write the HIPS data to the 'HIPS_All' sheet
-    obs_df.to_excel(writer, sheet_name='HIPS_All', index=False)
 ################################################################################################
 # Combine SPARTAN and GCHP dataset based on lat/lon
 ################################################################################################
@@ -146,7 +64,7 @@ for mon in range(1, 13):
     obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
     obs_df = obs_df.dropna(subset=[species], thresh=1)
 
-    # Extract lon/lat, BC, BC/PM, and BC/SO4 from observation data
+    # Extract lon/lat, BC, BC/PM25, and BC/SO4 from observation data
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
@@ -191,7 +109,7 @@ for mon in range(1, 13):
     match_lon_u = match_sim_lon[ind]
     match_lat_u = match_sim_lat[ind]
     match_sim_u = match_sim[ind]
-    # Calculate the average observation data for each unique simulation box, that is, annual
+    # Calculate the monthly average observation data for each unique simulation box
     match_obs_u = np.zeros(len(ct))
     for i in range(len(ct)):
         irow = np.where((coords == coords_u[i]).all(axis=1))
@@ -203,7 +121,7 @@ for mon in range(1, 13):
     match_lon_u = np.delete(match_lon_u, nanindex)
     match_lat_u = np.delete(match_lat_u, nanindex)
     match_sim_u = np.delete(match_sim_u, nanindex)
-    match_obs_u = np.delete(match_obs_u, nanindex) # this is the annual obs conc
+    match_obs_u = np.delete(match_obs_u, nanindex)
 
     # Create DataFrame for current month
     columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
@@ -216,19 +134,21 @@ for mon in range(1, 13):
     # Read Site name and lon/lat from Site_detail.xlsx
     site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
                             usecols=['Country', 'City', 'Latitude', 'Longitude'])
-    geometry_site = [Point(lon, lat) for lat, lon in zip(site_df['Latitude'], site_df['Longitude'])]
-    gdf_site = gpd.GeoDataFrame(site_df, geometry=geometry_site, crs='EPSG:4326')
-    # Create GeoDataFrames from compr_df
-    geometry_compr = [Point(lon, lat).buffer(buffer) for lat, lon in zip(match_lat_u, match_lon_u)] # remember buffer
-    gdf_compr = gpd.GeoDataFrame(compr_df, geometry=geometry_compr, crs='EPSG:4326')
-    # Perform spatial join
-    gdf_compr['geometry_nearest'] = gdf_compr['geometry'].apply(lambda x: nearest_points(x, gdf_site.unary_union)[1])
-    joined_gdf = gpd.sjoin(gdf_compr, gdf_site, how='left', op='intersects')
-    # Reset the index of joined_gdf
-    joined_gdf.reset_index(drop=True, inplace=True)
-    # Extract the relevant columns from the joined GeoDataFrame
-    compr_df['Country'] = joined_gdf['Country']
-    compr_df['City'] = joined_gdf['City']
+
+
+    # Function to find matching rows and add 'Country' and 'City'
+    def find_and_add_location(lat, lon):
+        for index, row in site_df.iterrows():
+            if abs(row['Latitude'] - lat) <= 1 and abs(row['Longitude'] - lon) <= 1:
+                return row['Country'], row['City']
+        return None, None
+
+    # Apply the function to 'compr_df' and create new columns
+    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
+                                                   result_type='expand')
+
+    # Display the updated 'compr_df'
+    print(compr_df)
 
     # Save monthly CSV file
     outfile = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, species, year, mon)
@@ -262,86 +182,3 @@ with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.form
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)
 # annual_df.to_csv(annual_file, index=False)  # Set index=False to avoid writing row indices to the CSV file
 sim_df.close()
-
-################################################################################################
-# Map SPARTAN and GCHP data
-################################################################################################
-# Map SPARTAN and GCHP data
-for mon in range(1, 13):
-    # Plot map using simulation data
-    sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
-    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
-    sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
-
-    plt.style.use('default')
-    plt.figure(figsize=(10, 5))
-    left = 0.1  # Adjust the left position
-    bottom = 0.1  # Adjust the bottom position
-    width = 0.8  # Adjust the width
-    height = 0.8  # Adjust the height
-    ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
-    ax.coastlines(color=(0.4, 0.4, 0.4))  # Set the color of coastlines to dark grey
-    ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))  # Set the color of borders to dark grey
-    ax.set_global()
-
-    ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
-
-    # Define the colormap
-    cmap = WhGrYlRd
-    cmap_reversed = cmap
-
-    vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
-
-    # Plot data for each face
-    for face in range(6):
-        x = sim_df.corner_lons.isel(nf=face)
-        y = sim_df.corner_lats.isel(nf=face)
-        v = sim_df[species].isel(nf=face)
-
-        im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
-
-    # Read comparison data
-    compar_filename = f'{cres}_LUO_Sim_vs_SPARTAN_{species}_{year}{mon:02d}_MonMean.csv'
-    compar_df = pd.read_csv(os.path.join(out_dir, compar_filename))
-    compar_notna = compar_df[compar_df.notna().all(axis=1)]
-    lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
-
-    # Define marker sizes
-    s1 = [40] * len(obs)  # inner circle: Observation
-    s2 = [120] * len(obs)  # outer ring: Simulation
-
-    # Create scatter plot
-    im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
-    im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
-                    linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
-
-    # Calculate the global mean of simulated and observed data
-    global_mean_sim = np.nanmean(sim)
-    global_mean_obs = np.nanmean(obs)
-    global_std_sim = np.nanstd(sim)
-    global_std_obs = np.nanstd(obs)
-
-    # Display statistics as text annotations on the plot
-    month_str = calendar.month_name[mon]
-    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
-            fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
-            fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
-
-    # Plot title and colorbar
-    plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
-              fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-    # plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
-    colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
-    num_ticks = 5
-    colorbar.locator = plt.MaxNLocator(num_ticks)
-    colorbar.update_ticks()
-    font_properties = font_manager.FontProperties(family='Arial', size=12)
-    colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
-    # colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-    colorbar.ax.tick_params(axis='y', labelsize=10)
-    plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
-    # plt.show()
-

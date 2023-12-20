@@ -29,78 +29,92 @@ obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}/'.format(cres.lower(), species)
 ################################################################################################
-# Create scatter plot for annual data
+# Map SPARTAN and GCHP data for the entire year
 ################################################################################################
-# Read the file
-annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)), sheet_name='All')
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.1  # Adjust the left position
+bottom = 0.1  # Adjust the bottom position
+width = 0.8  # Adjust the width
+height = 0.8  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 
-# Drop rows where BC is greater than 1
-annual_df = annual_df.loc[annual_df['obs'] <= 20]
+# Define the colormap
+cmap = WhGrYlRd
+cmap_reversed = cmap
+vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+# Accumulate data for each face over the year
+annual_v = None
 
-# Create scatter plot with white background, black border, and no grid
-sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, hue='City', s=25, alpha=1, ax=ax)
-scatterplot.set_facecolor('white')  # set background color to white
-border_width = 1
-for spine in scatterplot.spines.values():
-    spine.set_edgecolor('black')  # set border color to black
-    spine.set_linewidth(border_width)  # set border width
-scatterplot.grid(False)  # remove the grid
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+        sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+        sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
 
-# Modify legend background color and position
-legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12)
-# legend.get_frame().set_linewidth(0.0)  # remove legend border
-legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
 
-# Set title, xlim, ylim, ticks, labels
+        if annual_v is None:
+            annual_v = v
+        else:
+            annual_v += v
+
+    # Calculate the annual average
+    annual_v /= 12
+
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)),
+                          sheet_name='Average')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
+
+# Create scatter plot
+im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
+im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
+
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
+
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
+
+# Plot title and colorbar
 plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
-          fontsize=14, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-
-plt.xlim([-0.5, 16])
-plt.ylim([-0.5, 16])
-# plt.xlim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
-# plt.ylim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
-plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
-plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
-
-# Add 1:1 line with black dash
-x = annual_df['obs']
-y = annual_df['obs']
-plt.plot([annual_df['sim'].min(), annual_df['sim'].max()], [annual_df['sim'].min(), annual_df['sim'].max()],
-         color='grey', linestyle='--', linewidth=1)
-
-# Add number of data points to the plot
-num_points = len(annual_df)
-plt.text(0.70, 0.3, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
-# plt.text(0.05, 0.81, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
-
-# Perform linear regression with NaN handling
-mask = ~np.isnan(annual_df['obs']) & ~np.isnan(annual_df['sim'])
-slope, intercept, r_value, p_value, std_err = stats.linregress(annual_df['obs'][mask], annual_df['sim'][mask])
-# Check for NaN in results
-if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
-    print("Linear regression results contain NaN values. Check the input data.")
-else:
-    # Add linear regression line and text
-    sns.regplot(x='obs', y='sim', data=annual_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
-    # Change the sign of the intercept for display
-    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
-
-    # Update the text line with the adjusted intercept
-    plt.text(0.70, 0.35, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=14)
-
-plt.xlabel('SPARTAN Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
-plt.ylabel('GCHP Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
-
-# show the plot
-plt.tight_layout()
-plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+            fontsize=14, fontname='Arial') # PM$_{{2.5}}$
+# plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
+num_ticks = 5
+colorbar.locator = plt.MaxNLocator(num_ticks)
+colorbar.update_ticks()
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+# colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+colorbar.ax.tick_params(axis='y', labelsize=10)
+# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
 plt.show()
 

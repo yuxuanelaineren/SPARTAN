@@ -115,6 +115,14 @@ with pd.ExcelWriter(os.path.join(out_dir, "HIPS_SPARTAN.xlsx"), engine='openpyxl
 ################################################################################################
 # Combine SPARTAN and GCHP dataset based on lat/lon
 ################################################################################################
+
+# Function to find matching rows and add 'Country' and 'City'
+def find_and_add_location(lat, lon):
+    for index, row in site_df.iterrows():
+        if abs(row['Latitude'] - lat) <= 1 and abs(row['Longitude'] - lon) <= 1:
+            return row['Country'], row['City']
+    return None, None
+
 # Create empty lists to store data for each month
 monthly_data = []
 
@@ -148,7 +156,7 @@ for mon in range(1, 13):
     obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
     obs_df = obs_df.dropna(subset=[species], thresh=1)
 
-    # Extract lon/lat, BC, BC/PM, and BC/SO4 from observation data
+    # Extract lon/lat, BC, BC/PM25, and BC/SO4 from observation data
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
@@ -193,7 +201,7 @@ for mon in range(1, 13):
     match_lon_u = match_sim_lon[ind]
     match_lat_u = match_sim_lat[ind]
     match_sim_u = match_sim[ind]
-    # Calculate the average observation data for each unique simulation box, that is, annual
+    # Calculate the monthly average observation data for each unique simulation box
     match_obs_u = np.zeros(len(ct))
     for i in range(len(ct)):
         irow = np.where((coords == coords_u[i]).all(axis=1))
@@ -205,7 +213,7 @@ for mon in range(1, 13):
     match_lon_u = np.delete(match_lon_u, nanindex)
     match_lat_u = np.delete(match_lat_u, nanindex)
     match_sim_u = np.delete(match_sim_u, nanindex)
-    match_obs_u = np.delete(match_obs_u, nanindex) # this is the annual obs conc
+    match_obs_u = np.delete(match_obs_u, nanindex)
 
     # Create DataFrame for current month
     columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
@@ -215,22 +223,11 @@ for mon in range(1, 13):
     # Add a 'month' column to the DataFrame
     compr_df['month'] = mon
 
-    # Read Site name and lon/lat from Site_detail.xlsx
-    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                            usecols=['Country', 'City', 'Latitude', 'Longitude'])
-    geometry_site = [Point(lon, lat) for lat, lon in zip(site_df['Latitude'], site_df['Longitude'])]
-    gdf_site = gpd.GeoDataFrame(site_df, geometry=geometry_site, crs='EPSG:4326')
-    # Create GeoDataFrames from compr_df
-    geometry_compr = [Point(lon, lat).buffer(buffer) for lat, lon in zip(match_lat_u, match_lon_u)] # remember buffer
-    gdf_compr = gpd.GeoDataFrame(compr_df, geometry=geometry_compr, crs='EPSG:4326')
-    # Perform spatial join
-    gdf_compr['geometry_nearest'] = gdf_compr['geometry'].apply(lambda x: nearest_points(x, gdf_site.unary_union)[1])
-    joined_gdf = gpd.sjoin(gdf_compr, gdf_site, how='left', op='intersects')
-    # Reset the index of joined_gdf
-    joined_gdf.reset_index(drop=True, inplace=True)
-    # Extract the relevant columns from the joined GeoDataFrame
-    compr_df['Country'] = joined_gdf['Country']
-    compr_df['City'] = joined_gdf['City']
+    # Apply the function to 'compr_df' and create new columns
+    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
+                                                   result_type='expand')
+    # Display the updated 'compr_df'
+    print(compr_df)
 
     # Save monthly CSV file
     outfile = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, species, year, mon)
@@ -254,8 +251,10 @@ for mon in range(1, 13):
 annual_df = pd.concat(monthly_data, ignore_index=True)
 # Add a 'month' column to the annual DataFrame
 annual_df['month'] = annual_df['month'].astype(int)
-# Calculate annual average for each site
-annual_average_df = annual_df.groupby(['Country', 'City']).mean().reset_index()
+
+# Calculate annual average for 'sim' and 'obs', and sum for 'num_obs' for each site
+annual_average_df = annual_df.groupby(['Country', 'City']).agg({'sim': 'mean', 'obs': 'mean', 'num_obs': 'sum'}).reset_index()
+
 with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
     annual_df.to_excel(writer, sheet_name='All', index=False)
     annual_average_df.to_excel(writer, sheet_name='Average', index=False)
@@ -348,7 +347,97 @@ for mon in range(1, 13):
     plt.show()
 
 ################################################################################################
-# Create scatter plot for annual data
+# Map SPARTAN and GCHP data for the entire year
+################################################################################################
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.1  # Adjust the left position
+bottom = 0.1  # Adjust the bottom position
+width = 0.8  # Adjust the width
+height = 0.8  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+
+# Define the colormap
+cmap = WhGrYlRd
+cmap_reversed = cmap
+vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+
+# Accumulate data for each face over the year
+annual_v = None
+
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+        sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+        sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
+
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
+
+        if annual_v is None:
+            annual_v = v
+        else:
+            annual_v += v
+
+    # Calculate the annual average
+    annual_v /= 12
+
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)),
+                          sheet_name='Average')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
+
+# Create scatter plot
+im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
+im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
+
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
+
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
+
+# Plot title and colorbar
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
+            fontsize=14, fontname='Arial') # PM$_{{2.5}}$
+# plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
+num_ticks = 5
+colorbar.locator = plt.MaxNLocator(num_ticks)
+colorbar.update_ticks()
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+# colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+colorbar.ax.tick_params(axis='y', labelsize=10)
+# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+plt.show()
+
+################################################################################################
+# Create scatter plot for monthly data
 ################################################################################################
 # Read the file
 annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)), sheet_name='All')
@@ -420,6 +509,6 @@ plt.ylabel('GCHP Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
 plt.show()
 
