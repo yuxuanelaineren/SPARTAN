@@ -21,7 +21,7 @@ from scipy import stats
 
 cres = 'C360'
 year = 2018
-species = 'BC'
+species = 'BC_PM25'
 
 # Set the directory path
 sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
@@ -173,10 +173,14 @@ annual_df = pd.concat(monthly_data, ignore_index=True)
 # Add a 'month' column to the annual DataFrame
 annual_df['month'] = annual_df['month'].astype(int)
 # Calculate annual average for each site
-annual_average_df = annual_df.groupby(['Country', 'City']).mean().reset_index()
-with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
-    annual_df.to_excel(writer, sheet_name='All', index=False)
-    annual_average_df.to_excel(writer, sheet_name='Average', index=False)
+annual_average_df = annual_df.groupby(['country', 'city']).agg({'lat': 'first',
+                                                                'lon': 'first',
+                                                                'sim': 'mean',
+                                                                'obs': 'mean',
+                                                                'num_obs': 'sum'}).reset_index()
+with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
+    annual_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
 
 # Save annual CSV file
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)

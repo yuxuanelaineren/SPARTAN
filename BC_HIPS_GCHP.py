@@ -251,13 +251,11 @@ for mon in range(1, 13):
 annual_df = pd.concat(monthly_data, ignore_index=True)
 # Add a 'month' column to the annual DataFrame
 annual_df['month'] = annual_df['month'].astype(int)
-
-# Calculate annual average for 'sim' and 'obs', and sum for 'num_obs' for each site
-annual_average_df = annual_df.groupby(['Country', 'City']).agg({'sim': 'mean', 'obs': 'mean', 'num_obs': 'sum'}).reset_index()
-
-with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
-    annual_df.to_excel(writer, sheet_name='All', index=False)
-    annual_average_df.to_excel(writer, sheet_name='Average', index=False)
+# Calculate annual average for each site
+annual_average_df = annual_df.groupby(['country', 'city']).agg({'sim': 'mean', 'obs': 'mean', 'num_obs': 'sum'}).reset_index()
+with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
+    annual_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
 
 # Save annual CSV file
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)
@@ -276,10 +274,10 @@ for mon in range(1, 13):
 
     plt.style.use('default')
     plt.figure(figsize=(10, 5))
-    left = 0.1  # Adjust the left position
-    bottom = 0.1  # Adjust the bottom position
-    width = 0.8  # Adjust the width
-    height = 0.8  # Adjust the height
+    left = 0.05  # Adjust the left position
+    bottom = 0.02  # Adjust the bottom position
+    width = 0.85  # Adjust the width
+    height = 0.95  # Adjust the height
     ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
     ax.coastlines(color=(0.4, 0.4, 0.4))  # Set the color of coastlines to dark grey
     ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))  # Set the color of borders to dark grey
@@ -291,7 +289,7 @@ for mon in range(1, 13):
     cmap = WhGrYlRd
     cmap_reversed = cmap
 
-    vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+    vmax = 8  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
     # Plot data for each face
     for face in range(6):
@@ -325,25 +323,24 @@ for mon in range(1, 13):
 
     # Display statistics as text annotations on the plot
     month_str = calendar.month_name[mon]
-    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
+    ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.2f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
+    ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
     ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
     # Plot title and colorbar
-    plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
-              fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-    # plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+    # plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial') # PM$_{{2.5}}$
+    plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
     colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
     num_ticks = 5
     colorbar.locator = plt.MaxNLocator(num_ticks)
     colorbar.update_ticks()
     font_properties = font_manager.FontProperties(family='Arial', size=12)
-    colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
-    # colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+    # colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+    colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
     colorbar.ax.tick_params(axis='y', labelsize=10)
-    # plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
+    # plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
     plt.show()
 
 ################################################################################################
@@ -352,10 +349,10 @@ for mon in range(1, 13):
 # Map SPARTAN and GCHP data for the entire year
 plt.style.use('default')
 plt.figure(figsize=(10, 5))
-left = 0.1  # Adjust the left position
-bottom = 0.1  # Adjust the bottom position
-width = 0.8  # Adjust the width
-height = 0.8  # Adjust the height
+left = 0.05  # Adjust the left position
+bottom = 0.02  # Adjust the bottom position
+width = 0.85  # Adjust the width
+height = 0.95  # Adjust the height
 ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
 ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
@@ -365,7 +362,7 @@ ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 # Define the colormap
 cmap = WhGrYlRd
 cmap_reversed = cmap
-vmax = 2  # 10 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+vmax = 8  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
 # Accumulate data for each face over the year
 annual_v = None
@@ -392,8 +389,8 @@ for face in range(6):
     im = ax.pcolormesh(x, y, annual_v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
 # Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)),
-                          sheet_name='Average')
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)),
+                          sheet_name='Annual')
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
 lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
 
@@ -415,16 +412,16 @@ global_std_obs = np.nanstd(obs)
 
 # Display statistics as text annotations on the plot
 month_str = calendar.month_name[mon]
-ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.3f}',
+ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.2f}',
         fontsize=12, fontname='Arial', transform=ax.transAxes)
-ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.3f}',
+ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
         fontsize=12, fontname='Arial', transform=ax.transAxes)
-ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.02, 0.05, f'2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
 # Plot title and colorbar
 plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
             fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-# plt.title(f'{species}$ Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+# plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
 colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
 num_ticks = 5
 colorbar.locator = plt.MaxNLocator(num_ticks)
@@ -437,10 +434,11 @@ colorbar.ax.tick_params(axis='y', labelsize=10)
 plt.show()
 
 ################################################################################################
-# Create scatter plot for monthly data
+# Create scatter plot for monthly and annual data
 ################################################################################################
 # Read the file
-annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.xlsx'.format(cres, species, year)), sheet_name='All')
+# annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Mon')
+annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 annual_df = annual_df.loc[annual_df['obs'] <= 20]
@@ -450,7 +448,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, hue='City', s=25, alpha=1, ax=ax)
+scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, hue='city', s=25, alpha=1, ax=ax)
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -467,19 +465,19 @@ legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
 plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
           fontsize=14, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
 
-plt.xlim([-0.5, 16])
-plt.ylim([-0.5, 16])
+plt.xlim([-0.5, 12])
+plt.ylim([-0.5, 12])
 # plt.xlim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
 # plt.ylim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
-plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
-plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=14)
+plt.xticks([0, 4, 8, 12], fontname='Arial', size=14)
+plt.yticks([0, 4, 8, 12], fontname='Arial', size=14)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Add 1:1 line with black dash
 x = annual_df['obs']
 y = annual_df['obs']
-plt.plot([annual_df['sim'].min(), annual_df['sim'].max()], [annual_df['sim'].min(), annual_df['sim'].max()],
+plt.plot([annual_df['obs'].min(), annual_df['obs'].max()], [annual_df['obs'].min(), annual_df['obs'].max()],
          color='grey', linestyle='--', linewidth=1)
 
 # Add number of data points to the plot
@@ -509,6 +507,7 @@ plt.ylabel('GCHP Black Carbon (µg/m$^3$)', fontsize=14, color='black', fontname
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
+# plt.savefig(out_dir + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
+# plt.savefig(out_dir + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
 plt.show()
 
