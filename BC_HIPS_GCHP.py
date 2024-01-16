@@ -112,6 +112,7 @@ obs_df.drop("Site_Code", axis=1, inplace=True)
 with pd.ExcelWriter(os.path.join(out_dir, "HIPS_SPARTAN.xlsx"), engine='openpyxl') as writer:
     # Write the HIPS data to the 'HIPS_All' sheet
     obs_df.to_excel(writer, sheet_name='HIPS_All', index=False)
+
 ################################################################################################
 # Combine SPARTAN and GCHP dataset based on lat/lon
 ################################################################################################
@@ -130,6 +131,7 @@ monthly_data = []
 for mon in range(1, 13):
     # Load simulation and observation data
     sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4')
+    # sim_df = xr.open_dataset('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
     obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
