@@ -19,124 +19,30 @@ from shapely.ops import nearest_points
 import seaborn as sns
 from scipy import stats
 
-cres = 'C720'
+cres = 'C360'
 year = 2018
-species = 'BC_PM25'
+species = 'BC'
 
 # Set the directory path
-# sim_dir = '/Volumes/rvmartin2/Active/dandan.z/GCHP-v13.4.1/output-c720-LUO-HTAPv3/monthly/'
-# sim_dir = '/Volumes/rvmartin2/Active/dandan.z/GCHP-v13.4.1/output-c720-LUO-HTAPv3/monthly/'
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/'
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}/'.format(cres.lower(), species)
 
 ################################################################################################
-# Extract BC_HIPS from master file and lon/lat from site.details
+# Combine measurement and GCHP dataset based on lat/lon
 ################################################################################################
-# Create an empty list to store individual HIPS DataFrames
-HIPS_dfs = []
-
-# Iterate over each file in the directory
-for filename in os.listdir(obs_dir):
-    if filename.endswith('.csv'):
-        # Read the data from the master file
-        master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
-
-        # Specify the required columns
-        HIPS_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
-                        'BC_HIPS_ug', 'IC_SO4_ug']
-        # Check if all required columns are present
-        if all(col in master_data.columns for col in HIPS_columns):
-            # Remove leading/trailing whitespaces from column names
-            master_data.columns = master_data.columns.str.strip() #Important!
-            # Select the specified columns
-            HIPS_df = master_data[HIPS_columns].copy()
-
-            # Select PM2.5, rows where Mass_type is 1
-            HIPS_df['Mass_type'] = pd.to_numeric(HIPS_df['Mass_type'], errors='coerce')
-            HIPS_df = HIPS_df.loc[HIPS_df['Mass_type'] == 1]
-
-            # Convert the relevant columns to numeric
-            HIPS_df['BC_HIPS_ug'] = pd.to_numeric(HIPS_df['BC_HIPS_ug'], errors='coerce')
-            HIPS_df['mass_ug'] = pd.to_numeric(HIPS_df['mass_ug'], errors='coerce')
-            HIPS_df['Volume_m3'] = pd.to_numeric(HIPS_df['Volume_m3'], errors='coerce')
-            HIPS_df['IC_SO4_ug'] = pd.to_numeric(HIPS_df['IC_SO4_ug'], errors='coerce')
-
-            # Convert 'start_year' to numeric and then to integers
-            # HIPS_df['start_year'] = pd.to_numeric(HIPS_df['start_year'], errors='coerce')
-            # HIPS_df['start_year'] = HIPS_df['start_year'].astype('Int64')  # 'Int64' allows for NaN values
-
-            # Drop rows with NaN values
-            HIPS_df = HIPS_df.dropna(subset=['start_year'])
-            HIPS_df = HIPS_df.dropna(subset=['Volume_m3'])
-            HIPS_df = HIPS_df.dropna(subset=['BC_HIPS_ug']) # Don't forget to change
-            HIPS_df = HIPS_df.dropna(subset=['IC_SO4_ug']) # Don't forget to change
-
-            # Extract the site name from the filename
-            site_name = filename.split('_')[0]
-            # Add the site name as a column in the selected data
-            HIPS_df["Site"] = [site_name] * len(HIPS_df)
-
-            # Append the current HIPS_df to the list
-            HIPS_dfs.append(HIPS_df)
-        else:
-            print(f"Skipping {filename} because not all required columns are present.")
-
-# Concatenate all HIPS DataFrames into a single DataFrame
-HIPS_df = pd.concat(HIPS_dfs, ignore_index=True)
-
-# Assuming your DataFrame is named obs_df
-site_counts = HIPS_df.groupby('Site')['FilterID'].count()
-
-# Print the number of rows for each site
-for site, count in site_counts.items():
-    print(f"{site}: {count} rows")
-
-# Calculate BC concentrations, fractions, and BC/Sulfate
-HIPS_df['BC'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['Volume_m3']
-HIPS_df['PM25'] = HIPS_df['mass_ug'] / HIPS_df['Volume_m3']
-HIPS_df['SO4'] = HIPS_df['IC_SO4_ug'] / HIPS_df['Volume_m3']
-HIPS_df['BC_PM25'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['mass_ug']
-HIPS_df['BC_SO4'] = HIPS_df['BC_HIPS_ug'] / HIPS_df['IC_SO4_ug']
-
-# Read Site name and lon/lat from Site_detail.xlsx
-site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                        usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
-
-# Merge the dataframes based on the "Site" and "Site_Code" columns
-obs_df = pd.merge(HIPS_df, site_df, how="left", left_on="Site", right_on="Site_Code")
-
-# Drop the duplicate "Site_Code" column
-obs_df.drop("Site_Code", axis=1, inplace=True)
-
-# Write to excel file
-with pd.ExcelWriter(os.path.join(out_dir, "HIPS_SPARTAN.xlsx"), engine='openpyxl') as writer:
-    # Write the HIPS data to the 'HIPS_All' sheet
-    obs_df.to_excel(writer, sheet_name='HIPS_All', index=False)
-
-################################################################################################
-# Combine SPARTAN and GCHP dataset based on lat/lon
-################################################################################################
-
-# Function to find matching rows and add 'Country' and 'City'
-def find_and_add_location(lat, lon):
-    for index, row in site_df.iterrows():
-        if abs(row['Latitude'] - lat) <= 1 and abs(row['Longitude'] - lon) <= 1:
-            return row['Country'], row['City']
-    return None, None
-
 # Create empty lists to store data for each month
 monthly_data = []
 
 # Loop through each month
 for mon in range(1, 13):
     # Load simulation and observation data
-    # sim_df = xr.open_dataset(sim_dir + 'C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
-    sim_df = xr.open_dataset(sim_dir + 'C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
-    obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
+    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4')
+    # sim_df = xr.open_dataset('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
+    obs_df = pd.read_excel(out_dir + 'BC_CAWNET.xlsx')
     # Filter obs_df based on 'start_month'
-    obs_df = obs_df[obs_df['start_month'] == mon]
+    # obs_df = obs_df[obs_df['start_month'] == mon]
     # Display information about the dataset
     # print(sim_df)
     # Display information about data variables
@@ -199,7 +105,7 @@ for mon in range(1, 13):
         match_sim_lat[k] = np.nanmean(sim_latk[ii])
         match_sim_lon[k] = np.nanmean(sim_lonk[ii])
 
-    # Get unique lat/lon and average observation data at the same simulation box
+    # Get unique lat/lon and observation data at the same simulation box
     coords = np.concatenate((match_sim_lat[:, None], match_sim_lon[:, None]), axis=1)
     coords_u, ind, ct = np.unique(coords, return_index=True, return_counts=True, axis=0)
     match_lon_u = match_sim_lon[ind]
@@ -227,14 +133,11 @@ for mon in range(1, 13):
     # Add a 'month' column to the DataFrame
     compr_df['month'] = mon
 
-    # Apply the function to 'compr_df' and create new columns
-    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
-                                                   result_type='expand')
     # Display the updated 'compr_df'
     print(compr_df)
 
     # Save monthly CSV file
-    outfile = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, species, year, mon)
+    outfile = out_dir + '{}_LUO_Sim_vs_CAWNET_{}_{}{:02d}_MonMean.csv'.format(cres, species, year, mon)
     compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
 
     # Append data to the monthly_data list
@@ -256,11 +159,10 @@ annual_df = pd.concat(monthly_data, ignore_index=True)
 # Add a 'month' column to the annual DataFrame
 annual_df['month'] = annual_df['month'].astype(int)
 # Calculate annual average for each site
-annual_average_df = annual_df.groupby(['country', 'city']).agg({'sim': 'mean', 'obs': 'mean', 'num_obs': 'sum'}).reset_index()
-with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
+annual_average_df = annual_df.groupby(['lat', 'lon']).agg({'sim': 'mean', 'obs': 'mean', 'num_obs': 'sum'}).reset_index()
+with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_CAWNET_{}_{}_Summary.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
     annual_df.to_excel(writer, sheet_name='Mon', index=False)
     annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
-
 # Save annual CSV file
 # annual_file = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_AnnualMean.csv'.format(cres, species, year)
 # annual_df.to_csv(annual_file, index=False)  # Set index=False to avoid writing row indices to the CSV file
