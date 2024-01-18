@@ -190,10 +190,10 @@ merged_df.rename(columns={"BC_SSR_(ug/m3)": "SSR"}, inplace=True)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
-
+# fig, ax = plt.subplots(figsize=(8, 7)) # without legend
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=merged_df, hue='City', s=15, alpha=1, ax=ax)
+scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=merged_df, hue='City', s=30, alpha=1, ax=ax)
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -207,11 +207,11 @@ legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.45), loc='center 
 legend.get_texts()[0].set_fontname("Arial")  # set fontname of the first label
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('Comparison of Black Carbon Concentration Measured by HIPS and UV-Vis', fontname='Arial', fontsize=14, y=1.03)
+plt.title('Comparison of Black Carbon Concentration Measured by HIPS and UV-Vis', fontname='Arial', fontsize=16, y=1.03)
 plt.xlim([merged_df['HIPS'].min()-0.5, 35])
 plt.ylim([merged_df['HIPS'].min()-0.5, 35])
-plt.xticks([0, 10, 20, 30], fontname='Arial', size=14)
-plt.yticks([0, 10, 20, 30], fontname='Arial', size=14)
+plt.xticks([0, 10, 20, 30], fontname='Arial', size=16)
+plt.yticks([0, 10, 20, 30], fontname='Arial', size=16)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -222,7 +222,7 @@ plt.plot([merged_df['HIPS'].min(), merged_df['HIPS'].max()], [merged_df['HIPS'].
 
 # Add number of data points to the plot
 num_points = len(merged_df)
-plt.text(0.05, 0.81, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
+plt.text(0.05, 0.805, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=16)
 
 # Perform linear regression with NaN handling
 mask = ~np.isnan(merged_df['UV-Vis']) & ~np.isnan(merged_df['HIPS'])
@@ -239,7 +239,7 @@ else:
 
     # Update the text line with the adjusted intercept
     plt.text(0.05, 0.85, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=14)
+             transform=plt.gca().transAxes, fontsize=16)
 
 plt.xlabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
 plt.ylabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=14, color='black', fontname='Arial')
