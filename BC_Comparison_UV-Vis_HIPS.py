@@ -122,6 +122,7 @@ merged_df = pd.merge(UV_df, HIPS_df, on=["FilterID"], how='inner')
 
 # Convert the relevant columns to numeric to handle any non-numeric values
 merged_df['BC_HIPS_ug'] = pd.to_numeric(merged_df['BC_HIPS_ug'], errors='coerce')
+merged_df['BC_SSR_ug'] = pd.to_numeric(merged_df['BC_SSR_ug'], errors='coerce')
 merged_df['f_BC'] = pd.to_numeric(merged_df['f_BC'], errors='coerce')
 merged_df['mass_ug'] = pd.to_numeric(merged_df['mass_ug'], errors='coerce')
 merged_df['Volume_m3'] = pd.to_numeric(merged_df['Volume_m3'], errors='coerce')
@@ -132,6 +133,7 @@ merged_df['BC_UV-Vis_ug'] = merged_df['f_BC'] * merged_df['mass_ug']
 # Calculate BC concentrations
 merged_df['BC_HIPS_(ug/m3)'] = merged_df['BC_HIPS_ug'] / merged_df['Volume_m3']
 merged_df['BC_UV-Vis_(ug/m3)'] = merged_df['f_BC'] * merged_df['mass_ug'] / merged_df['Volume_m3']
+merged_df['BC_SSR_(ug/m3)'] = merged_df['BC_SSR_ug'] / merged_df['Volume_m3']
 
 # Calculate BC fractions
 merged_df.rename(columns={"f_BC": "f_BC_UV-Vis"}, inplace=True)
@@ -181,6 +183,10 @@ merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
 # Rename to simplify coding
 merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
 merged_df.rename(columns={"BC_UV-Vis_(ug/m3)": "UV-Vis"}, inplace=True)
+merged_df.rename(columns={"BC_SSR_(ug/m3)": "SSR"}, inplace=True)
+
+# Drop rows with NaN values in the 'SSR' column
+# merged_df = merged_df.dropna(subset=['SSR'])
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
