@@ -254,7 +254,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 # fig, ax = plt.subplots(figsize=(8, 7)) # without legend
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=merged_df, hue='city', palette=city_palette, s=50, alpha=1, ax=ax, edgecolor='k')
+scatterplot = sns.scatterplot(x='SSR', y='HIPS', data=merged_df, hue='city', palette=city_palette, s=50, alpha=1, ax=ax, edgecolor='k')
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():

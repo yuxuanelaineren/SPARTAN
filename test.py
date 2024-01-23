@@ -124,7 +124,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 # fig, ax = plt.subplots(figsize=(8, 7)) # without legend
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='UV-Vis', y='HIPS', data=merged_df, hue='city', palette=city_palette, s=50, alpha=1, ax=ax, edgecolor='k')
+scatterplot = sns.scatterplot(x='SSR', y='HIPS', data=merged_df, hue='city', palette=city_palette, s=50, alpha=1, ax=ax, edgecolor='k')
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -160,10 +160,10 @@ legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1
 
 # Set title, xlim, ylim, ticks, labels
 plt.title('Comparison of Black Carbon Concentration Measured by HIPS and SSR', fontname='Arial', fontsize=16, y=1.03)
-plt.xlim([merged_df['HIPS'].min()-0.5, 35])
-plt.ylim([merged_df['HIPS'].min()-0.5, 35])
-plt.xticks([0, 10, 20, 30], fontname='Arial', size=18)
-plt.yticks([0, 10, 20, 30], fontname='Arial', size=18)
+plt.xlim([merged_df['HIPS'].min()-0.5, 6])
+plt.ylim([merged_df['HIPS'].min()-0.5, 6])
+plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -198,5 +198,5 @@ plt.ylabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='bl
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(os.path.join(Out_dir_path, "BC_Concentration_Comparison_HIPS_SSR.tiff"), format="TIFF", dpi=300)
+plt.savefig(os.path.join(Out_dir_path, "BC_Concentration_Comparison_HIPS_SSR_6.tiff"), format="TIFF", dpi=300)
 plt.show()

@@ -34,17 +34,17 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}/'.format(cres
 # Read the file
 # annual_df = pd.read_csv(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}01_MonMean.csv'.format(cres, species, year)))
 # annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
-annual_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_CAWNET_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
+annual_df = pd.read_excel(os.path.join('/Users/renyuxuan/Downloads/', '{}_LUO_Sim_vs_CAWNET_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 # annual_df = annual_df.loc[annual_df['obs'] <= 20]
 
 # Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(7, 6))
 
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, hue='city', s=80, alpha=1, ax=ax, edgecolor='k')
+scatterplot = sns.scatterplot(x='obs', y='sim', data=annual_df, s=70, alpha=1, ax=ax, edgecolor='k')
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -55,8 +55,8 @@ scatterplot.grid(False)  # remove the grid
 # legend = plt.legend(facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12)
 
 # Set title, xlim, ylim, ticks, labels
-plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
-          fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. CAWNET',
+          fontsize=18, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
 plt.xlim([-0.5, 12])
 plt.ylim([-0.5, 12])
 # plt.xlim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
@@ -95,8 +95,8 @@ else:
     plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
              transform=plt.gca().transAxes, fontsize=22)
 
-plt.xlabel('CAWNET BC/(PM$_{{2.5}}$ - Nitrate)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('GCHP BC/(PM$_{{2.5}}$ - Nitrate)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('CAWNET Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('GCHP Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
