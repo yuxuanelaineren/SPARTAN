@@ -117,5 +117,75 @@ with pd.ExcelWriter(os.path.join(Out_dir_path, "HIPS_SPARTAN.xlsx"), engine='ope
     # Write the summary statistics to the 'HIPS_All_Summary' sheet
     HIPS_stats.to_excel(writer, sheet_name='HIPS_All_Summary', index=False)
 
+################################################################################################
+# Calculate statistics for non-zero HIPS dataset
+################################################################################################
+
+# Drop rows where 'BC_HIPS_ug' is zero
+HIPS_df = pd.read_excel(os.path.join(Out_dir_path, "HIPS_SPARTAN.xlsx"), sheet_name='HIPS_All')
+HIPS_df_nonzero = HIPS_df[HIPS_df['BC_HIPS_ug'] != 0]
+
+# Calculate summary statistics for BC_HIPS_(ug/m3) after dropping rows with BC_HIPS_ug = 0
+HIPS_stats_nonzero = HIPS_df_nonzero.groupby('Site').agg({
+    'BC_HIPS_(ug/m3)': ['mean', 'std', 'max', 'min'],
+    'f_BC_HIPS': ['mean', 'std', 'max', 'min']
+}).reset_index()
+
+# Flatten multi-level column names
+HIPS_stats_nonzero.columns = ['_'.join(col).strip() for col in HIPS_stats_nonzero.columns.values]
+
+# Rename columns for clarity
+HIPS_stats_nonzero.rename(columns={
+    'Site_': 'Site',
+    'BC_HIPS_(ug/m3)_mean': 'BC_HIPS_mean_nonzero',
+    'BC_HIPS_(ug/m3)_std': 'BC_HIPS_std_nonzero',
+    'BC_HIPS_(ug/m3)_max': 'BC_HIPS_max_nonzero',
+    'BC_HIPS_(ug/m3)_min': 'BC_HIPS_min_nonzero',
+    'f_BC_HIPS_mean': 'f_BC_HIPS_mean_nonzero',
+    'f_BC_HIPS_std': 'f_BC_HIPS_std_nonzero',
+    'f_BC_HIPS_max': 'f_BC_HIPS_max_nonzero',
+    'f_BC_HIPS_min': 'f_BC_HIPS_min_nonzero',
+}, inplace=True)
+
+# Add the count to the summary data
+number_df_nonzero = pd.DataFrame(list(HIPS_count.items()), columns=['Site', 'Number_nonzero'])
+HIPS_stats_nonzero = pd.merge(HIPS_stats_nonzero, number_df_nonzero, on='Site')
+
+# Create an ExcelWriter to write to the same Excel file
+with pd.ExcelWriter(os.path.join(Out_dir_path, "HIPS_SPARTAN.xlsx"), engine='openpyxl') as writer:
+    # Write the HIPS data to the 'HIPS_UV-Vis' sheet
+    HIPS_df.to_excel(writer, sheet_name='HIPS_All', index=False)
+
+    # Calculate summary statistics for BC_HIPS_(ug/m3) before merging
+    HIPS_stats = HIPS_df.groupby('Site').agg({
+        'BC_HIPS_(ug/m3)': ['mean', 'std', 'max', 'min'],
+        'f_BC_HIPS': ['mean', 'std', 'max', 'min']
+    }).reset_index()
+
+    # Flatten multi-level column names
+    HIPS_stats.columns = ['_'.join(col).strip() for col in HIPS_stats.columns.values]
+
+    # Rename columns for clarity
+    HIPS_stats.rename(columns={
+        'Site_': 'Site',
+        'BC_HIPS_(ug/m3)_mean': 'BC_HIPS_mean',
+        'BC_HIPS_(ug/m3)_std': 'BC_HIPS_std',
+        'BC_HIPS_(ug/m3)_max': 'BC_HIPS_max',
+        'BC_HIPS_(ug/m3)_min': 'BC_HIPS_min',
+        'f_BC_HIPS_mean': 'f_BC_HIPS_mean',
+        'f_BC_HIPS_std': 'f_BC_HIPS_std',
+        'f_BC_HIPS_max': 'f_BC_HIPS_max',
+        'f_BC_HIPS_min': 'f_BC_HIPS_min',
+    }, inplace=True)
+
+    # Add the count to the summary data
+    number_df = pd.DataFrame(list(HIPS_count.items()), columns=['Site', 'Number'])
+    HIPS_stats = pd.merge(HIPS_stats, number_df, on='Site')
+
+    # Write the summary statistics to the 'HIPS_All_Summary' sheet
+    HIPS_stats.to_excel(writer, sheet_name='HIPS_All_Summary', index=False)
+
+    # Write the summary statistics for non-zero BC_HIPS to the 'HIPS_non0_Summary' sheet
+    HIPS_stats_nonzero.to_excel(writer, sheet_name='HIPS_non0_Summary', index=False)
 
 
