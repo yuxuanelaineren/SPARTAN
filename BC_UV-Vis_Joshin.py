@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 
 # set the directory path where the Excel files are located
-Metadata_directory_path = r'C:/Users/renyuxuan/Desktop/Research/Black Carbon/Analysis-10May2023_Joshin\ALL Metadata'
+Metadata_directory_path = r'C:/Users/renyuxuan/Desktop/Research/Black_Carbon/Analysis-10May2023_Joshin\ALL Metadata'
 
 # initialize an empty list to store the dataframes
 dataframes = []
@@ -37,7 +37,7 @@ combined_df_PM25 = combined_df_PM25.replace([np.nan, np.inf, -np.inf, 0], np.nan
 
 
 # Add Blank averaged file row to the PM2.5 dataframe
-# ADD the new BLANK row as a dictionary
+# Add the new BLANK row as a dictionary
 new_row = {'Filter ID': 'AAAA-BLNK-X', 'Analysis ID': 'AAAA-BLNK-X', 'Filter Type': 'NF', 'Sampling Start Date': '0', 'Sampling End Date': '0', 'Mass collected on filter (ug)': '1', 'Sampled volume (m3)': '1', 'PM2.5(ug/m3)': '1'}
 # append the new row to the bottom of the dataframe
 combined_df_PM25 = combined_df_PM25.append(new_row, ignore_index=True)
@@ -285,7 +285,7 @@ Blank_t_Data = pd.concat(load_files_t(blankt_data_files), axis=1)
 Blank_t_average = Blank_t_Data.mean(axis=1)
 Blank_t = Blank_t_average.to_numpy()
 
-Ref_t_value = [T[x,:]/Blank_t[x] for x in range(len(Blank_t))] #Normalizing Transmittance
+Ref_t_value = [T[x,:]/Blank_t[x] for x in range(len(Blank_t))] # Normalizing Transmittance
 Ref_t_value = np.asarray(Ref_t_value)
 
 Ref_t_value[Ref_t_value > 1] = 1 # Reducing all unrealistic values above 1 to 1.
