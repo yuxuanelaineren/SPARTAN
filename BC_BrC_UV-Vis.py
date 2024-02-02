@@ -181,6 +181,8 @@ for idx, row in mass_df.iterrows():
         ODs = np.log((1 - relative_r) / relative_t)
         ODs = np.abs(ODs)
 
+
+
         # Calculate MAC_r and babs
         MAC_r = ((0.48 * (ODs ** 1.32)) / row['mass_ug']) * (np.pi * (d ** 2) / 4) * 1e6
         babs = ((0.48 * (ODs ** 1.32)) / row['mass_ug']) * (np.pi * (d ** 2) / 4) * 1e6
@@ -195,7 +197,8 @@ babs_df = pd.concat(babs_dfs, ignore_index=True)
 print("All MAC and babs DataFrames concatenated.")
 
 # Calculate other parameters
-f_BC = (babs_df[900] / mass_df['PM_conc_(ug/m3)']) / 4.58
+f_BC = (babs_df[babs_df['nm'] == 900] / mass_df['PM_conc_(ug/m3)']) / 4.58
+
 
 # Create DataFrame with required columns
 result_df = pd.DataFrame({

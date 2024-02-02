@@ -451,7 +451,7 @@ fig.subplots_adjust(bottom=0.12, left=0.06)
 plt.show()
 
 ################################################################################################
-# Investigate diff in BC fraction v.s. PM mass
+# Investigate diff in BC fraction vs PM mass
 ################################################################################################
 # Read the file
 merged_df = pd.read_excel(os.path.join(Out_dir_path, "BC_Comparison_HIPS_UV-Vis.xlsx"))
