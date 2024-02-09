@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
 import calendar
 import matplotlib.pyplot as plt
@@ -16,15 +19,16 @@ from matplotlib import font_manager
 import seaborn as sns
 from scipy import stats
 
-# Set the directory path
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/'
+
 ################################################################################################
 # Create scatter plot for difference in sim and obs vs elevation
 ################################################################################################
+# Set the directory path
+sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/'
 # Read the file
 # diff_df = pd.read_excel(os.path.join(sim_dir, 'c360_BC/C360_LUO_Sim_vs_SPARTAN_BC_2018_Summary.xlsx'), sheet_name = 'Annual')
-diff_df = pd.read_excel(os.path.join(out_dir, 'c360_c720_BC_2018_01.xlsx'))
+diff_df = pd.read_excel(os.path.join(out_dir, 'c360_HTAP_CEDS_HDI.xlsx'))
 
 # Print the names of each city
 unique_cities = diff_df['city'].unique()
@@ -54,7 +58,7 @@ region_colors = {
         (1, 0.64, 0), (1, 0.55, 0.14), (1, 0.63, 0.48), (1, 0.74, 0.61), (1, 0.85, 0.73), (1, 0.96, 0.85)
     ],  # Orange shades
     'North America': [
-        (0, 0, 0.5), (0, 0, 0.8), (0, 0, 1), (0.39, 0.58, 0.93), (0.54, 0.72, 0.97), (0.68, 0.85, 0.9)
+        (0, 0, 0.5), (0, 0, 1), (0.39, 0.58, 0.93), (0, 0, 0.8), (0.54, 0.72, 0.97), (0.68, 0.85, 0.9)
     ],  # Blue shades
     'South America': [
         (0.58, 0.1, 0.81), (0.9, 0.4, 1), (0.66, 0.33, 0.83), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
@@ -93,9 +97,9 @@ fig, ax = plt.subplots(figsize=(8, 6))
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
 # Plot 'difference_c360' as circles
-sns.scatterplot(x='Elevation_meters', y='difference_c360', data=diff_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k', marker='o')
+sns.scatterplot(x='HDI', y='diff_f_HTAP', data=diff_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k', marker='o')
 # Plot 'difference_c720' as triangles
-sns.scatterplot(x='Elevation_meters', y='difference_c720', data=diff_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k', marker='^')
+sns.scatterplot(x='HDI', y='diff_f_CEDS', data=diff_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k', marker='^')
 
 ax.set_facecolor('white')
 border_width = 1
@@ -129,16 +133,16 @@ legend_handles_city = [plt.Line2D([0], [0], marker='o', color='w', markerfacecol
 legend_city = ax.legend(handles=legend_handles_city, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12)
 
 # Set x-axis scale to logarithmic
-plt.xscale('log')
+# plt.xscale('log')
 # Set title, xlim, ylim, ticks, labels
-plt.title(f'BC Comparison: Difference vs Elevation',
-          fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([2, 4000])
-plt.ylim([-10, 15])
+plt.title(f'HDI vs Normalized Difference',
+          fontsize=18, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([0.4, 1])
+plt.ylim([-3, 2])
 # plt.xlim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
 # plt.ylim([annual_df['sim'].min()-0.5, annual_df['sim'].max()+0.5])
-plt.xticks([10, 100, 1000, 3000], fontname='Arial', size=18)
-plt.yticks([-10, -5, 0, 5, 10, 15], fontname='Arial', size=18)
+plt.xticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1], fontname='Arial', size=18)
+plt.yticks([-3, -2, -1, 0, 1, 2], fontname='Arial', size=18)
 ax.tick_params(axis='x', direction='out', width=1, length=5)
 ax.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -147,17 +151,15 @@ plt.axhline(y=0, color='grey', linestyle='--', linewidth=1)
 
 # Add number of data points to the plot
 num_points = len(diff_df)
-plt.text(0.08, 0.9, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
+# plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
 # plt.text(0.1, 0.7, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=22)
-plt.text(0.65, 0.05, f'January, 2018', transform=ax.transAxes, fontsize=18)
-# plt.text(0.05, 0.81, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=14)
 
-plt.xlabel('Elevation (m)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Difference (Observation - Simulation) (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('Human Development Index (HDI)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Normalized Difference (Observation - Simulation)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Scatter_c720_c360_BC_Difference_Elevation_2018.tiff', dpi=600)
+plt.savefig(out_dir + 'Scatter_c360_HTAP_CEDS_BC_Normalized_Difference_HDI.tiff', dpi=600)
 # plt.savefig(out_dir + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
 # plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
 

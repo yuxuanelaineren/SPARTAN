@@ -121,7 +121,7 @@ with pd.ExcelWriter(os.path.join(out_dir, "HIPS_SPARTAN.xlsx"), engine='openpyxl
 # Function to find matching rows and add 'Country' and 'City'
 def find_and_add_location(lat, lon):
     for index, row in site_df.iterrows():
-        if abs(row['Latitude'] - lat) <= 1 and abs(row['Longitude'] - lon) <= 1:
+        if abs(row['Latitude'] - lat) <= 0.3 and abs(row['Longitude'] - lon) <= 0.3:
             return row['Country'], row['City']
     return None, None
 
@@ -153,7 +153,7 @@ for mon in range(1, 13):
     sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
     sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
     sim_df['BC_PM25_NO3'] = sim_df['BC'] / (sim_df['PM25'] - sim_df['NIT'])
-    sim_conc = np.array(sim_df[species])
+    sim_conc = np.array(sim_df[species]).reshape([6, 360, 360])
     buffer = 10
 
     # Drop NaN and infinite values from obs_conc
@@ -471,10 +471,10 @@ region_mapping = {
 # Define custom palette for each region with 5 shades for each color
 region_colors = {
     'Central Asia': [
-        (1, 0.42, 0.70), (0.8, 0.52, 0.7), (1, 0.48, 0.41), (1, 0.64, 0.64), (1, 0.76, 0.48)
+        (1, 0.42, 0.70), (0.8, 0.52, 0.7), (1, 0.4, 0.4), (1, 0.64, 0.64), (1, 0.76, 0.48)
     ],  # Pink shades
     'South Asia': [
-        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.2, 0.2), (1, 0.4, 0.4), (1, 0.6, 0.6)
+        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.2, 0.2), (1, 0.48, 0.41), (1, 0.6, 0.6)
     ],  # Red shades
     'East Asia': [
         (1, 0.64, 0), (1, 0.55, 0.14), (1, 0.63, 0.48), (1, 0.74, 0.61), (1, 0.85, 0.73), (1, 0.96, 0.85)
@@ -844,30 +844,16 @@ font_properties = font_manager.FontProperties(family='Arial', size=12)
 colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
 colorbar.ax.tick_params(axis='y', labelsize=10)
 # plt.savefig(out_dir + '{}_Sim_vs_CAWNET_{}_{}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
-plt.show()import os
-import calendar
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs  # cartopy must be >=0.19
-import xarray as xr
-import cartopy.feature as cfeature
-import pandas as pd
-from gamap_colormap import WhGrYlRd
-import calendar
-import numpy as np
-from scipy.spatial.distance import cdist
-import geopandas as gpd
-from shapely.geometry import Point
-from shapely.ops import nearest_points
-from matplotlib import font_manager
-import seaborn as sns
-from scipy import stats
+plt.show()
 
-# Set the directory path
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/'
+
+
 ################################################################################################
 # Create scatter plot for difference in sim and obs vs elevation
 ################################################################################################
+# Set the directory path
+sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/'
 # Read the file
 # diff_df = pd.read_excel(os.path.join(sim_dir, 'c360_BC/C360_LUO_Sim_vs_SPARTAN_BC_2018_Summary.xlsx'), sheet_name = 'Annual')
 diff_df = pd.read_excel(os.path.join(out_dir, 'c360_c720_BC_2018_01.xlsx'))
@@ -1007,4 +993,44 @@ plt.savefig(out_dir + 'Scatter_c720_c360_BC_Difference_Elevation_2018.tiff', dpi
 # plt.savefig(out_dir + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
 # plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
 
+plt.show()
+
+# seasonal variations
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+CEDS_sim = [15.93606377, 13.06744576, 7.127143383, 6.255723953, 4.879863262, 3.123033524, 3.557436228, 3.227097988, 4.803154945, 12.49798489, 17.76980782, 20.32411766]
+obs = [2.735662251, 3.27318941, 2.73875873, 2.362111952, 2.140101034, 1.838316092, 1.5547228, 1.885276454, 2.371057107, 2.851534884, 4.014037007, 1.673341111]
+HTAP_sim = [10.87263489, 11.16574287, 12.18006897, 6.738657475, 6.194628239, 5.789536953, 5.534196854, 6.513328552, 7.129979134, 7.787933826, 14.91756535, 12.3012619]
+
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Scatter plot
+plt.scatter(months, CEDS_sim, label='CEDS Simulation', color='red', s=80, alpha=1, edgecolor='k', marker='o')
+plt.scatter(months, HTAP_sim, label='HTAP Observation', color='blue', s=80, alpha=1, edgecolor='k', marker='o')
+plt.scatter(months, obs, label='Observation', color='green', s=80, alpha=1, edgecolor='k', marker='^')
+
+border_width = 1
+plt.ylim([0, 22])
+plt.xticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+
+# Add labels and title
+plt.title('Seasonal variations in BC Concentration in Beijing', fontsize=16, fontname='Arial', y=1.03)
+plt.xlabel('Month', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('BC concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Customize legend
+legend = plt.legend(fontsize=16)
+legend.get_frame().set_edgecolor('black')  # Set legend border color
+legend.get_frame().set_linewidth(border_width)  # Set legend border width
+
+# Set legend font to Arial
+prop = fm.FontProperties(family='Arial', size=16)
+plt.setp(legend.get_texts(), fontproperties=prop)
+
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/c360_noLUO_BC/Scatter_c360_CEDS_HTAP_BC_MonMean.tiff', dpi=600)
+
+# Show the plot
 plt.show()
