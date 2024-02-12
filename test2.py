@@ -23,18 +23,18 @@ from scipy import stats
 cres = 'C360'
 year = 2019
 species = 'BC'
-inventroy = 'CEDS'
+inventory = 'CEDS'
 deposition = 'noLUO'
 
 # Set the directory path
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/c360_noLUO_BC/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 
 ################################################################################################
 # Create scatter plot for monthly and annual data
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_noLUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Mon')
-# compr_df = pd.read_excel(os.path.join(out_dir, '{}_noLUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
+# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 # compr_df = compr_df.loc[compr_df['obs'] <= 20]
@@ -104,8 +104,8 @@ for city in unique_cities:
 print("City Palette:", city_palette)
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.3]
-x_range_2 = [2.3, compr_df['obs'].max()] # 2.4 to include Beijing
+x_range_1 = [compr_df['obs'].min(), compr_df['obs'].max()]
+# x_range_2 = [2.3, compr_df['obs'].max()] # 2.4 to include Beijing
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
@@ -145,12 +145,13 @@ legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1
 # legend.get_frame().set_linewidth(0.0)
 
 # Set title, xlim, ylim, ticks, labels
-plt.title(f'GCHP-v13.4.1 {cres.lower()} CEDS noLUO vs SPARTAN',
+plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
           fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 22])
-plt.ylim([-0.5, 22])
-plt.xticks([0, 4, 8, 12, 16, 20], fontname='Arial', size=18)
-plt.yticks([0, 4, 8, 12, 16, 20], fontname='Arial', size=18)
+plt.xlim([-0.5, 20]) # 14 for EDGAR
+plt.ylim([-0.5, 20])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+# plt.xticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -164,39 +165,36 @@ plt.plot([compr_df['obs'].min(), compr_df['obs'].max()], [compr_df['obs'].min(),
 mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
 slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
 # Perform linear regression for the second segment
-mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
+# mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
+# slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
 # Plot regression lines
 sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
-            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-sns.regplot(x='obs', y='sim', data=compr_df[mask_2],
-            scatter=False, ci=None, line_kws={'color': 'red', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# sns.regplot(x='obs', y='sim', data=compr_df[mask_2], scatter=False, ci=None, line_kws={'color': 'red', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
 # Add text with linear regression equations and other statistics
 intercept_display_1 = abs(intercept_1)
-intercept_display_2 = abs(intercept_2)
+# intercept_display_2 = abs(intercept_2)
 intercept_sign_1 = '-' if intercept_1 < 0 else '+'
-intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.05, 0.85, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
-         transform=ax.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.60, f'y = {slope_2:.2f}x + {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
-         transform=ax.transAxes, fontsize=18, color='red')
+# intercept_sign_2 = '-' if intercept_2 < 0 else '+'
+plt.text(0.6, 0.46, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+         transform=ax.transAxes, fontsize=18, color='black')
+# plt.text(0.05, 0.60, f'y = {slope_2:.2f}x + {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}', transform=ax.transAxes, fontsize=18, color='red')
 
 # Add the number of data points for each segment
 num_points_1 = mask_1.sum()
-num_points_2 = mask_2.sum()
-plt.text(0.05, 0.80, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+# num_points_2 = mask_2.sum()
+plt.text(0.6, 0.4, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.05, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
-plt.text(0.85, 0.05, f'2019', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
 
 plt.xlabel('Observed Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Scatter_{}_Sim_CEDS_noLUO_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
-# plt.savefig(out_dir + 'Scatter_{}_Sim_CEDS_noLUO_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
-# plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
+plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# lt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 
 plt.show()
 

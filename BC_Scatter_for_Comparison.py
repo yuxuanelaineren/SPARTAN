@@ -21,10 +21,10 @@ from scipy import stats
 
 
 cres = 'C360'
-year = 2015
+year = 2019
 species = 'BC'
-inventory = 'EDGAR'
-deposition = 'LUO'
+inventory = 'CEDS'
+deposition = 'noLUO'
 
 # Set the directory path
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
@@ -33,8 +33,8 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 # Create scatter plot for monthly and annual data
 ################################################################################################
 # Read the file
-# compr_df = pd.read_excel(os.path.join(out_dir, '{}_noLUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
+# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 # compr_df = compr_df.loc[compr_df['obs'] <= 20]
@@ -147,10 +147,11 @@ legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1
 # Set title, xlim, ylim, ticks, labels
 plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
           fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12])
-plt.ylim([-0.5, 12])
-plt.xticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
+plt.xlim([-0.5, 22]) # 14 for edgar
+plt.ylim([-0.5, 22])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+# plt.yticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -178,24 +179,25 @@ intercept_sign_1 = '-' if intercept_1 < 0 else '+'
 intercept_sign_2 = '-' if intercept_2 < 0 else '+'
 plt.text(0.05, 0.85, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
          transform=ax.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.60, f'y = {slope_2:.2f}x + {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+plt.text(0.05, 0.60, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
          transform=ax.transAxes, fontsize=18, color='red')
 
 # Add the number of data points for each segment
 num_points_1 = mask_1.sum()
 num_points_2 = mask_2.sum()
-plt.text(0.05, 0.80, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+plt.text(0.05, 0.79, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+plt.text(0.05, 0.54, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+# plt.text(0.6, 0.4, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='black')
 
-plt.text(0.85, 0.05, f'2015', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
 
 plt.xlabel('Observed Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
-# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_2reg.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 # plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
 
 plt.show()
