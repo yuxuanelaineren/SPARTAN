@@ -21,20 +21,20 @@ from scipy import stats
 
 
 cres = 'C360'
-year = 2019
+year = 2015
 species = 'BC'
-inventroy = 'CEDS'
-deposition = 'noLUO'
+inventory = 'EDGAR'
+deposition = 'LUO'
 
 # Set the directory path
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/c360_noLUO_BC/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 
 ################################################################################################
 # Create scatter plot for monthly and annual data
 ################################################################################################
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_noLUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_noLUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 # compr_df = compr_df.loc[compr_df['obs'] <= 20]
@@ -145,7 +145,7 @@ legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1
 # legend.get_frame().set_linewidth(0.0)
 
 # Set title, xlim, ylim, ticks, labels
-plt.title(f'GCHP-v13.4.1 {cres.lower()} CEDS noLUO vs SPARTAN',
+plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
           fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
 plt.xlim([-0.5, 12])
 plt.ylim([-0.5, 12])
@@ -187,15 +187,15 @@ num_points_2 = mask_2.sum()
 plt.text(0.05, 0.80, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
 plt.text(0.05, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
-plt.text(0.85, 0.05, f'2019', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.85, 0.05, f'2015', transform=scatterplot.transAxes, fontsize=18)
 
 plt.xlabel('Observed Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Scatter_{}_Sim_CEDS_noLUO_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
-plt.savefig(out_dir + 'Scatter_{}_Sim_CEDS_noLUO_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 # plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
 
 plt.show()

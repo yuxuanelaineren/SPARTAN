@@ -20,14 +20,19 @@ import seaborn as sns
 from scipy import stats
 
 cres = 'C360'
-year = 2018
-species = 'BC_SO4'
+year = 2015
+species = 'BC'
+inventory = 'EDGAR'
+deposition = 'LUO'
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower())
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-noLUO/monthly/'.format(cres.lower(), deposition) # HTAP, LUO
+# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
+sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}/'.format(cres.lower(), species)
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 
 ################################################################################################
 # Extract BC_HIPS from master file and lon/lat from site.details
@@ -131,8 +136,10 @@ monthly_data = []
 # Loop through each month
 for mon in range(1, 13):
     # Load simulation and observation data
-    sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4')
+    sim_df = xr.open_dataset(sim_dir + 'WUCR3.LUO_WETDEP.C360.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(year, mon), engine='netcdf4') # EDGAR
+    # sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') # HTAP
     # sim_df = xr.open_dataset('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
+
     obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
@@ -234,7 +241,7 @@ for mon in range(1, 13):
     print(compr_df)
 
     # Save monthly CSV file
-    outfile = out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, species, year, mon)
+    outfile = out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon)
     compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
 
     # Append data to the monthly_data list
@@ -262,7 +269,7 @@ annual_average_df = annual_df.groupby(['country', 'city']).agg({
     'num_obs': 'sum',
     'lat': 'mean',
     'lon': 'mean' }).reset_index()
-with pd.ExcelWriter(out_dir + '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year), engine='openpyxl') as writer:
+with pd.ExcelWriter(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
     annual_df.to_excel(writer, sheet_name='Mon', index=False)
     annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
 
@@ -274,7 +281,8 @@ sim_df.close()
 # Map SPARTAN and GCHP data
 for mon in range(1, 13):
     # Plot map using simulation data
-    sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+    sim_df = xr.open_dataset(sim_dir + 'WUCR3.LUO_WETDEP.C360.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(year, mon),
+                             engine='netcdf4')  # EDGAR
     sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
     sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
     sim_df['BC_PM25_NO3'] = sim_df['BC'] / (sim_df['PM25'] - sim_df['NIT'])
@@ -307,7 +315,7 @@ for mon in range(1, 13):
         im = ax.pcolormesh(x, y, v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
     # Read comparison data
-    compar_filename = f'{cres}_LUO_Sim_vs_SPARTAN_{species}_{year}{mon:02d}_MonMean.csv'
+    compar_filename = f'{cres}_{inventory}_{deposition}_Sim_vs_SPARTAN_{species}_{year}{mon:02d}_MonMean.csv'
     compar_df = pd.read_csv(os.path.join(out_dir, compar_filename))
     compar_notna = compar_df[compar_df.notna().all(axis=1)]
     lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
@@ -334,11 +342,10 @@ for mon in range(1, 13):
             fontsize=12, fontname='Arial', transform=ax.transAxes)
     ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
             fontsize=12, fontname='Arial', transform=ax.transAxes)
-    ax.text(0.02, 0.05, f'{month_str}, 2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
+    ax.text(0.02, 0.05, f'{month_str}, 2015', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
     # Plot title and colorbar
-    # plt.title(f'BC/Sulfate Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-    plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
+    plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=14, fontname='Arial') # PM$_{{2.5}}$
     colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
     num_ticks = 5
     colorbar.locator = plt.MaxNLocator(num_ticks)
@@ -347,7 +354,7 @@ for mon in range(1, 13):
     # colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
     colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
     colorbar.ax.tick_params(axis='y', labelsize=10)
-    # plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.tiff'.format(cres, species, year, mon), dpi=600)
+    # plt.savefig(out_dir + '{}_{}_{}Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year, mon), dpi=600)
     plt.show()
 
 ################################################################################################
@@ -376,7 +383,9 @@ annual_v = None
 
 for face in range(6):
     for mon in range(1, 13):
-        sim_df = xr.open_dataset(f'{sim_dir}{cres}.LUO.PM25.RH35.NOx.O3.{year}{mon:02d}.MonMean.nc4')
+        sim_df = xr.open_dataset(
+            sim_dir + 'WUCR3.LUO_WETDEP.C360.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(year, mon),
+            engine='netcdf4')  # EDGAR
         sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
         sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
         sim_df['BC_PM25_NO3'] = sim_df['BC'] / (sim_df['PM25'] - sim_df['NIT'])
@@ -397,7 +406,7 @@ for face in range(6):
     im = ax.pcolormesh(x, y, annual_v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
 # Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_LUO_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, species, year)),
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
                           sheet_name='Annual')
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
 lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
@@ -424,12 +433,11 @@ ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.2f}',
         fontsize=12, fontname='Arial', transform=ax.transAxes)
 ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
         fontsize=12, fontname='Arial', transform=ax.transAxes)
-ax.text(0.02, 0.05, f'2018', fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.02, 0.05, f'2015', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
 # Plot title and colorbar
-plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN',
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
             fontsize=14, fontname='Arial') # PM$_{{2.5}}$
-# plt.title(f'{species} Comparison: GCHP-v13.4.1 {cres.lower()} v.s. SPARTAN', fontsize=14, fontname='Arial')
 colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
 num_ticks = 5
 colorbar.locator = plt.MaxNLocator(num_ticks)
@@ -438,7 +446,7 @@ font_properties = font_manager.FontProperties(family='Arial', size=12)
 # colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
 colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
 colorbar.ax.tick_params(axis='y', labelsize=10)
-# plt.savefig(out_dir + '{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
+# plt.savefig(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
 
 ################################################################################################
