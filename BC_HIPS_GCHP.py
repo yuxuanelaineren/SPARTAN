@@ -26,10 +26,10 @@ inventory = 'CEDS'
 deposition = 'noLUO'
 
 # Set the directory path
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # CEDS, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-noLUO/monthly/'.format(cres.lower(), deposition) # HTAP, LUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
 # sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
@@ -140,8 +140,10 @@ for mon in range(1, 13):
     # sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') # HTAP
     # sim_df = xr.open_dataset('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4')
     # sim_df = xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') # CEDS
-
     obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
+    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
+                            usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
+
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
     # Display information about the dataset
@@ -173,6 +175,7 @@ for mon in range(1, 13):
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
     obs_lat = obs_df['Latitude']
     obs_conc = obs_df[species]
+    obs_year = obs_df['start_year']
 
     # Find the nearest simulation lat/lon neighbors for each observation
     match_obs_lon = np.zeros(len(obs_lon))
@@ -234,6 +237,7 @@ for mon in range(1, 13):
     compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
     # Add a 'month' column to the DataFrame
     compr_df['month'] = mon
+    compr_df['year'] = obs_year
 
     # Apply the function to 'compr_df' and create new columns
     compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
@@ -861,8 +865,6 @@ colorbar.ax.tick_params(axis='y', labelsize=10)
 # plt.savefig(out_dir + '{}_Sim_vs_CAWNET_{}_{}_AnnualMean.tiff'.format(cres, species, year), dpi=600)
 plt.show()
 
-
-
 ################################################################################################
 # Create scatter plot for difference in sim and obs vs elevation
 ################################################################################################
@@ -1010,6 +1012,9 @@ plt.savefig(out_dir + 'Scatter_c720_c360_BC_Difference_Elevation_2018.tiff', dpi
 
 plt.show()
 
+################################################################################################
+# Beijing: Plot seasonal variations
+################################################################################################
 # seasonal variations
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
@@ -1046,6 +1051,109 @@ prop = fm.FontProperties(family='Arial', size=16)
 plt.setp(legend.get_texts(), fontproperties=prop)
 
 # plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/c360_noLUO_BC/Scatter_c360_CEDS_HTAP_BC_MonMean.tiff', dpi=600)
+
+# Show the plot
+plt.show()
+################################################################################################
+# Beijing: Calculate monthly and annual average across different years
+################################################################################################
+# Load the data
+obs_df = pd.read_excel(out_dir + 'HIPS_SPARTAN.xlsx')
+CEDS_df = pd.read_excel(out_dir + 'C360_CEDS_noLUO_Sim_vs_SPARTAN_BC_2019_Summary.xlsx', sheet_name='Mon',
+                        usecols=['lat', 'lon', 'month', 'country', 'city', 'sim'])
+
+# Group by 'start_year' and 'start_month', calculate average and count
+obs_df = obs_df.groupby(['start_year', 'start_month', 'Country', 'City'])['BC_HIPS_ug'].agg(['mean', 'count']).reset_index()
+obs_df.columns = ['year_obs', 'month', 'country', 'city', 'obs', 'num_obs']
+
+# Merge observation and simulation data
+compr_df = pd.merge(obs_df, CEDS_df, on=['month', 'country', 'city'], how='inner')
+
+# Select the desired columns from the merged DataFrame
+compr_df = compr_df[['lat', 'lon', 'country', 'city', 'year_obs', 'month', 'sim', 'obs', 'num_obs']]
+
+# compr_df = compr_df[obs_df['city'] == 'Beijing']
+# Calculate annual average for each site
+annual_df = compr_df.groupby(['year_obs', 'country', 'city']).agg({
+    'sim': 'mean',
+    'obs': 'mean',
+    'num_obs': 'sum',
+    'lat': 'mean',
+    'lon': 'mean' }).reset_index()
+# Write results to Excel
+with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/' + 'Beijing_c360_sim_vs_SPARTAN_differeny_year.xlsx', engine='openpyxl') as writer:
+    compr_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_df.to_excel(writer, sheet_name='Annual', index=False)
+
+################################################################################################
+# Beijing: Plot seasonal variations
+################################################################################################
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+# Read the data
+compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/Beijing_c360_sim_vs_SPARTAN_differeny_year.xlsx', sheet_name='Mon')
+
+compr_df = compr_df[compr_df['city'] == 'Beijing']
+
+# Calculate the difference
+compr_df['diff'] = compr_df['obs'] - compr_df['sim']
+
+
+# Print column names
+print(compr_df.columns)
+
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Plot data for each year with different marker styles and colors
+for year, data in compr_df.groupby('year_obs'):
+    if year == 2020:
+        ax.plot(data['month'], data['diff'], markersize=8, marker='o', linestyle='None', label=str(int(year)),
+                color='red', markeredgewidth=0.5, markeredgecolor='black')
+    elif year == 2022:
+        ax.plot(data['month'], data['diff'], markersize=8, marker='s', linestyle='None', label=str(int(year)),
+                color='blue', markeredgewidth=0.5, markeredgecolor='black')
+    elif year == 2023:
+        ax.plot(data['month'], data['diff'], markersize=8, marker='^', linestyle='None', label=str(int(year)),
+                color='green', markeredgewidth=0.5, markeredgecolor='black')
+
+
+border_width = 1
+plt.ylim([-10, 25])
+plt.xticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
+plt.yticks([-10, -5, 0, 5, 10, 15, 20, 25], fontname='Arial', size=18)
+
+
+# Add y = 0 with grey dash
+plt.axhline(y=0, color='grey', linestyle='--', linewidth=1)
+
+# Add labels and title
+plt.title('Seasonal variations in BC Difference in Beijing', fontsize=16, fontname='Arial', y=1.03)
+plt.xlabel('Month', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Difference (Observation - Simulation) (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Customize legend
+legend = plt.legend(fontsize=16, frameon=True)
+legend.get_frame().set_edgecolor('black')  # Set legend border color
+legend.get_frame().set_linewidth(border_width)  # Set legend border width
+
+# Set legend font to Arial
+prop = fm.FontProperties(family='Arial', size=16)
+plt.setp(legend.get_texts(), fontproperties=prop)
+
+# Calculate average and count for each year
+average_diff = compr_df.groupby('year_obs')['diff'].mean()
+count_diff = compr_df.groupby('year_obs')['diff'].count()
+
+# Add text in the bottom left corner
+text = 'Yearly Average:\n'
+for year, avg_diff in average_diff.items():
+    text += f'{int(year)}: {avg_diff:.2f} µg/m$^3$ (n={count_diff[year]})\n'
+
+plt.text(0.05, 0.0000000000000001, text, transform=ax.transAxes, fontsize=16, fontname='Arial', horizontalalignment='left')
+
+plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/Beijing_c360_CEDS_BC_MonMean.tiff', dpi=600)
 
 # Show the plot
 plt.show()
