@@ -68,7 +68,7 @@ for year, avg_diff in average_diff.items():
 
 plt.text(0.05, 0.0000000000000001, text, transform=ax.transAxes, fontsize=16, fontname='Arial', horizontalalignment='left')
 
-plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/Beijing_c360_CEDS_Normalized_BC_MonMean.tiff', dpi=600)
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/representative_bias/Beijing_c360_CEDS_Normalized_BC_MonMean.tiff', dpi=600)
 
 # Show the plot
 plt.show()
