@@ -8,7 +8,7 @@ import cartopy.crs as ccrs  # cartopy must be >=0.19
 import xarray as xr
 import cartopy.feature as cfeature
 import pandas as pd
-from gamap_colormap import WhGrYlRd
+from gamap_colormap imsort WhGrYlRd
 import calendar
 import numpy as np
 from scipy.spatial.distance import cdist
