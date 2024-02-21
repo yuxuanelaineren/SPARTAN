@@ -32,9 +32,30 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 ################################################################################################
 # Create scatter plot for monthly and annual data
 ################################################################################################
+def get_city_index(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return cities.index(city)
+    return float('inf')  # If city is not found, place it at the end
+def get_region_for_city(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return region
+    print(f"Region not found for city: {city}")
+    return None
+def map_city_to_color(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_color = region_colors[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
+            return assigned_color
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
-# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 
 # Drop rows where BC is greater than 1
 # compr_df = compr_df.loc[compr_df['obs'] <= 20]
@@ -81,17 +102,6 @@ region_colors = {
     ]  # Pink shades
 }
 
-def map_city_to_color(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_color = region_colors[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
-            return assigned_color
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)  # Default to black if city is not found
-
-
 # Create an empty list to store the city_palette for each city
 city_palette = []
 city_color_match = []
@@ -104,8 +114,8 @@ for city in unique_cities:
 print("City Palette:", city_palette)
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.3]
-x_range_2 = [2.3, compr_df['obs'].max()] # 2.4 to include Beijing
+x_range_1 = [compr_df['obs'].min(), 2.4]
+x_range_2 = [2.4, compr_df['obs'].max()]
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
@@ -120,18 +130,6 @@ for spine in scatterplot.spines.values():
     spine.set_linewidth(border_width)  # set border width
 scatterplot.grid(False)  # remove the grid
 
-# Create a function to determine the index of a city in region_mapping
-def get_city_index(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return cities.index(city)
-    return float('inf')  # If city is not found, place it at the end
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
 # Sort the unique_cities list based on their appearance in region_mapping
 unique_cities_sorted = sorted(unique_cities, key=get_city_index)
 # Create legend with custom order
@@ -142,16 +140,17 @@ sorted_city_color_match = sorted(city_color_match, key=lambda x: (
 legend_labels = [city['city'] for city in sorted_city_color_match]
 legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=city['color'], markersize=8, label=city['city']) for city in sorted_city_color_match]
 legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
 # legend.get_frame().set_linewidth(0.0)
 
 # Set title, xlim, ylim, ticks, labels
 plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
           fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 22]) # 14 for edgar
-plt.ylim([-0.5, 22])
-plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-# plt.yticks([0, 2, 4, 6, 8, 10, 12], fontname='Arial', size=18)
-plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.xlim([-0.5, 12]) # 14 for edgar
+plt.ylim([-0.5, 12])
+plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+# plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -170,8 +169,8 @@ slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_d
 # Plot regression lines
 sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
             scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-sns.regplot(x='obs', y='sim', data=compr_df[mask_2],
-            scatter=False, ci=None, line_kws={'color': 'red', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# sns.regplot(x='obs', y='sim', data=compr_df[mask_2], scatter=False, ci=None, line_kws={'color': 'red', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
 # Add text with linear regression equations and other statistics
 intercept_display_1 = abs(intercept_1)
 intercept_display_2 = abs(intercept_2)
@@ -196,9 +195,7 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
-# plt.savefig(out_dir + 'Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_2reg.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
-# plt.savefig('/Users/renyuxuan/Downloads/' + 'Scatter_{}_Sim_vs_SPARTAN_{}_{:02d}_MonMean.tiff'.format(cres, species, year), dpi=600)
+plt.savefig(out_dir + 'Fig1_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 
 plt.show()
 

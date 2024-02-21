@@ -19,79 +19,110 @@ from matplotlib import font_manager
 import seaborn as sns
 from scipy import stats
 
+cres = 'C360'
+year = 2019
+species = 'BC'
+inventory = 'CEDS'
+deposition = 'noLUO'
+
 # Set the directory path
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/AMS/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+
 ################################################################################################
-# Extract IC from master file and lon/lat from site.details
+# Map SPARTAN and GCHP data for the entire year
 ################################################################################################
-# Create an empty list to store individual HIPS DataFrames
-IC_dfs = []
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.05  # Adjust the left position
+bottom = 0.02  # Adjust the bottom position
+width = 0.85  # Adjust the width
+height = 0.95  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 
-# Iterate over each file in the directory
-for filename in os.listdir(obs_dir):
-    if filename.endswith('.csv'):
-        # Read the data from the master file
-        master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
+# Define the colormap
+cmap = WhGrYlRd
+cmap_reversed = cmap
+vmax = 8  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
-        # Specify the required columns
-        IC_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
-                        'IC_NO3_ug', 'IC_SO4_ug', 'IC_NH4_ug']
-        # Check if all required columns are present
-        if all(col in master_data.columns for col in HIPS_columns):
-            # Remove leading/trailing whitespaces from column names
-            master_data.columns = master_data.columns.str.strip() #Important!
-            # Select the specified columns
-            IC_df = master_data[IC_columns].copy()
+# Accumulate data for each face over the year
+annual_v = None
 
-            # Select PM2.5, rows where Mass_type is 1
-            IC_df['Mass_type'] = pd.to_numeric(IC_df['Mass_type'], errors='coerce')
-            IC_df = IC_df.loc[IC_df['Mass_type'] == 1]
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
+            engine='netcdf4') # CEDS
 
-            # Convert the relevant columns to numeric
-            IC_df['IC_NO3_ug'] = pd.to_numeric(IC_df['IC_NO3_ug'], errors='coerce')
-            IC_df['IC_SO4_ug'] = pd.to_numeric(IC_df['IC_SO4_ug'], errors='coerce')
-            IC_df['IC_NH4_ug'] = pd.to_numeric(IC_df['IC_NH4_ug'], errors='coerce')
+        sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+        sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
+        sim_df['BC_PM25_NO3'] = sim_df['BC'] / (sim_df['PM25'] - sim_df['NIT'])
 
-            # Extract the site name from the filename
-            site_name = filename.split('_')[0]
-            # Add the site name as a column in the selected data
-            IC_df["Site"] = [site_name] * len(IC_df)
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
 
-            # Append the current HIPS_df to the list
-            IC_dfs.append(IC_df)
+        if annual_v is None:
+            annual_v = v
         else:
-            print(f"Skipping {filename} because not all required columns are present.")
+            annual_v = annual_v + v
 
-# Concatenate all HIPS DataFrames into a single DataFrame
-IC_df = pd.concat(IC_dfs, ignore_index=True)
+    # Calculate the annual average
+    annual_v /= 12
 
-# Assuming your DataFrame is named obs_df
-site_counts = IC_df.groupby('Site')['FilterID'].count()
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap_reversed, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-# Print the number of rows for each site
-for site, count in site_counts.items():
-    print(f"{site}: {count} rows")
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
 
-# Calculate concentrations in extraction solution, ug/mL
-IC_df['NO3'] = IC_df['IC_SO4_ug'] / '6'
-IC_df['SO4'] = IC_df['IC_SO4_ug'] / '6'
-IC_df['NH4'] = IC_df['IC_SO4_ug'] / '6'
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
 
-# Read Site name and lon/lat from Site_detail.xlsx
-site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                        usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
+# Create scatter plot
+im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=4)
+im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=cmap_reversed, edgecolor='black',
+                linewidth=0.8, vmin=0, vmax=vmax, zorder=3)
 
-# Merge the dataframes based on the "Site" and "Site_Code" columns
-obs_df = pd.merge(IC_df, site_df, how="left", left_on="Site", right_on="Site_Code")
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
 
-# Drop the duplicate "Site_Code" column
-obs_df.drop("Site_Code", axis=1, inplace=True)
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.2f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
+        fontsize=12, fontname='Arial', transform=ax.transAxes)
+ax.text(0.02, 0.05, f'2019', fontsize=12, fontname='Arial', transform=ax.transAxes)
 
-# Write to excel file
-with pd.ExcelWriter(os.path.join(out_dir, "IC_SPARTAN.xlsx"), engine='openpyxl') as writer:
-    # Write the HIPS data to the 'HIPS_All' sheet
-    obs_df.to_excel(writer, sheet_name='IC_All', index=False)
-
-
+# Plot title and colorbar
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
+            fontsize=14, fontname='Arial') # PM$_{{2.5}}$
+colorbar = plt.colorbar(im, orientation="vertical", pad=0.05, fraction=0.02)
+num_ticks = 5
+colorbar.locator = plt.MaxNLocator(num_ticks)
+colorbar.update_ticks()
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+# colorbar.set_label(f'BC/Sulfate', labelpad=10, fontproperties=font_properties)
+colorbar.set_label(f'{species} concentration (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+colorbar.ax.tick_params(axis='y', labelsize=10)
+# plt.savefig(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.show()
