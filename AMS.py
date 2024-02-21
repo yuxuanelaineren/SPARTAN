@@ -39,7 +39,7 @@ for filename in os.listdir(obs_dir):
         IC_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
                         'IC_NO3_ug', 'IC_SO4_ug', 'IC_NH4_ug']
         # Check if all required columns are present
-        if all(col in master_data.columns for col in HIPS_columns):
+        if all(col in master_data.columns for col in IC_columns):
             # Remove leading/trailing whitespaces from column names
             master_data.columns = master_data.columns.str.strip() #Important!
             # Select the specified columns
@@ -75,9 +75,9 @@ for site, count in site_counts.items():
     print(f"{site}: {count} rows")
 
 # Calculate concentrations in extraction solution, ug/mL
-IC_df['NO3'] = IC_df['IC_SO4_ug'] / '6'
-IC_df['SO4'] = IC_df['IC_SO4_ug'] / '6'
-IC_df['NH4'] = IC_df['IC_SO4_ug'] / '6'
+IC_df['NO3'] = IC_df['IC_SO4_ug'] / 6
+IC_df['SO4'] = IC_df['IC_SO4_ug'] / 6
+IC_df['NH4'] = IC_df['IC_SO4_ug'] / 6
 
 # Read Site name and lon/lat from Site_detail.xlsx
 site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
