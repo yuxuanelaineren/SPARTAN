@@ -58,6 +58,8 @@ def read_master_files(obs_dir):
                 # Convert the relevant columns to numeric
                 HIPS_df[['BC_HIPS_ug', 'mass_ug', 'Volume_m3', 'start_year']] = HIPS_df[
                     ['BC_HIPS_ug', 'mass_ug', 'Volume_m3', 'start_year']].apply(pd.to_numeric, errors='coerce')
+                # Select year 2019 - 2023
+                HIPS_df = HIPS_df[HIPS_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
                 # Drop rows with NaN values
                 HIPS_df = HIPS_df.dropna(subset=['start_year', 'Volume_m3', 'BC_HIPS_ug'])
                 HIPS_df = HIPS_df[HIPS_df['Volume_m3'] > 0]  # Exclude rows where Volume_m3 is 0
@@ -393,7 +395,22 @@ def map_city_to_color(city):
             return assigned_color
     print(f"City not found in any region: {city}")
     return (0, 0, 0)
-
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_marker = region_markers[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
+            return assigned_marker
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city)
+            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
+            return assigned_marker
+    return None
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
 compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
@@ -421,7 +438,7 @@ region_mapping = {region: [city for city in cities if city in unique_cities] for
 # Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
 region_colors = {
     'North America': [
-        (0, 0, 0.6), (0, 0.27, 0.8), (0, 0, 1), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
+        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
     ],  # Blue shades
     'Central Asia': [
         (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
@@ -454,6 +471,32 @@ for city in unique_cities:
         city_color_match.append({'city': city, 'color': city_color})  # Store both city name and color
 print("City Palette:", city_palette)
 
+# Define custom palette for each region with 5 shades for each color
+# markers = ['o', 's', '^', 'v', '<', '>', 'D', '*', 'H', '+', 'x', 'P', 'p', 'X', '1', '2', '3', '4']
+# ['o', 'H', 'p', 's', '^', 'P']
+region_markers = {
+    'North America': ['o', '^', 's', 'p', 'H', '*'],
+    'Australia': ['o', '^', 's', 'p', 'H', '*'],
+    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Africa': ['o', '^', 's', 'p', 'H', '*'],
+    'South America': ['o', '^', 's', 'p', 'H', '*'],
+}
+
+# Create an empty list to store the city_marker for each city
+city_marker = []
+city_marker_match = []
+
+# Iterate over each unique city and map it to a marker
+for city in unique_cities:
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        city_marker.append(marker)
+        city_marker_match.append({'city': city, 'marker': marker})
+
+print("City Marker:", city_marker)
+
 # Define the range of x-values for the two segments
 x_range_1 = [compr_df['obs'].min(), 2.4]
 x_range_2 = [2.4, compr_df['obs'].max()]
@@ -463,7 +506,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k')
+scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, ax=ax, edgecolor='k', style='city', markers=city_marker)
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -473,22 +516,32 @@ scatterplot.grid(False)  # remove the grid
 
 # Sort the unique_cities list based on their appearance in region_mapping
 unique_cities_sorted = sorted(unique_cities, key=get_city_index)
+
 # Create legend with custom order
 sorted_city_color_match = sorted(city_color_match, key=lambda x: (
     list(region_mapping.keys()).index(get_region_for_city(x['city'])),
     region_mapping[get_region_for_city(x['city'])].index(x['city'])
 ))
-legend_labels = [city['city'] for city in sorted_city_color_match]
-legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=city['color'], markersize=8, label=city['city']) for city in sorted_city_color_match]
+
+# Create legend handles with both color and marker for each city
+legend_handles = []
+for city_info in sorted_city_color_match:
+    city = city_info['city']
+    color = city_info['color']
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        handle = plt.Line2D([0], [0], marker=marker, color=color, linestyle='', markersize=8, label=city)
+        legend_handles.append(handle)
+
+# Create legend with custom handles
 legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
 legend.get_frame().set_edgecolor('black')
-# legend.get_frame().set_linewidth(0.0)
+
 
 # Set title, xlim, ylim, ticks, labels
-plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
-          fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12]) # 14 for edgar
-plt.ylim([-0.5, 12])
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([-0.5, 13.5]) # 14 for edgar
+plt.ylim([-0.5, 13.5])
 plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 # plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
@@ -517,21 +570,23 @@ intercept_display_1 = abs(intercept_1)
 intercept_display_2 = abs(intercept_2)
 intercept_sign_1 = '-' if intercept_1 < 0 else '+'
 intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.05, 0.85, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+plt.text(0.05, 0.81, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
          transform=ax.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.60, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+plt.text(0.05, 0.56, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
          transform=ax.transAxes, fontsize=18, color='red')
 
 # Add the number of data points for each segment
 num_points_1 = mask_1.sum()
 num_points_2 = mask_2.sum()
-plt.text(0.05, 0.79, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.54, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
-# plt.text(0.6, 0.4, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.05, 0.75, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+plt.text(0.05, 0.50, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
-plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
+# plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
+# for one regression line
+# plt.text(0.05, 0.44, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
 
-plt.xlabel('Observed Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # show the plot
