@@ -23,16 +23,16 @@ from matplotlib.colors import LinearSegmentedColormap
 
 
 cres = 'C360'
-year = 2015
+year = 2018
 species = 'BC'
-inventory = 'EDGAR'
+inventory = 'HTAP'
 deposition = 'LUO'
 
 # Set the directory path
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
 # sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
@@ -180,12 +180,12 @@ sns.regplot(x='obs', y='sim', data=compr_df[mask],
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+plt.text(0.05, 0.56, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='black')
 
 # Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.05, 0.5, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
 plt.text(0.75, 0.05, f'N = {year}', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
@@ -194,6 +194,6 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Fig_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig(out_dir + 'Fig6S_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 
 plt.show()
