@@ -22,17 +22,18 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 
 
-cres = 'C360'
-year = 2015
+cres = 'C720'
+year = 2018
 species = 'BC'
-inventory = 'EDGAR'
+inventory = 'HTAP'
 deposition = 'LUO'
 
 # Set the directory path
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
 # sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
@@ -42,7 +43,8 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 ################################################################################################
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_csv(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}01_MonMean.csv'.format(cres, inventory, deposition, species, year)))
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -157,8 +159,8 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12]) # 11 for edgar
-plt.ylim([-0.5, 12])
+plt.xlim([-0.5, 13]) # 11 for edgar
+plt.ylim([-0.5, 13])
 plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
@@ -167,7 +169,7 @@ scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 # Add 1:1 line with grey dash
 x = compr_df['obs']
 y = compr_df['obs']
-plt.plot([compr_df['obs'].min(), 11.5], [compr_df['obs'].min(), 11.5],
+plt.plot([compr_df['obs'].min(), 12.5], [compr_df['obs'].min(), 12.5],
          color='grey', linestyle='--', linewidth=1)
 
 # Perform linear regression for all segments
@@ -180,13 +182,13 @@ sns.regplot(x='obs', y='sim', data=compr_df[mask],
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+plt.text(0.05, 0.56, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='black')
 
 # Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-plt.text(0.75, 0.05, f'N = {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.05, 0.5, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.65, 0.05, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
 plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -194,6 +196,6 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Fig_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig(out_dir + 'Fig6S_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}01_MonMean.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 
 plt.show()
