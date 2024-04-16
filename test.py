@@ -2,8 +2,8 @@ import pandas as pd
 import os
 
 # Read the data
-Other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
-IMPROVE_df = pd.read_excel(Other_obs_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
+other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+IMPROVE_df = pd.read_excel(other_obs_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
 
 # Convert 'Date' column to datetime format
 IMPROVE_df['Date'] = pd.to_datetime(IMPROVE_df['Date'], format='%m/%d/%Y')
@@ -29,7 +29,7 @@ else:
     print("No rows with > 11 observations.")
 
 # Save EC_mon_df as sheet 'mon'
-with pd.ExcelWriter(os.path.join(Other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
     EC_mon_df.to_excel(writer, sheet_name='mon', index=False)
 
 # Calculate the annual average 'ECf_Val' for each 'SiteName', 'Latitude', 'Longitude'
@@ -37,5 +37,5 @@ EC_annual_df = EC_mon_df.groupby(['SiteName', 'Latitude', 'Longitude'])['EC_mon'
 EC_annual_df.columns = ['SiteName', 'Latitude', 'Longitude', 'EC_annual']
 
 # Save the annual DataFrame as 'annual'
-with pd.ExcelWriter(os.path.join(Other_obs_dir + 'IMPROVE_EC_Summary.xlsx', engine='openpyxl', mode='a') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='a') as writer:
     EC_annual_df.to_excel(writer, sheet_name='annual', index=False)

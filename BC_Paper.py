@@ -933,8 +933,8 @@ plt.show()
 # Other: Summarize IMPROVE EC data
 ################################################################################################
 # Read the data
-Other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
-IMPROVE_df = pd.read_excel(Other_obs_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
+other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+IMPROVE_df = pd.read_excel(other_obs_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
 
 # Convert 'Date' column to datetime format
 IMPROVE_df['Date'] = pd.to_datetime(IMPROVE_df['Date'], format='%m/%d/%Y')
@@ -960,7 +960,7 @@ else:
     print("No rows with > 11 observations.")
 
 # Save EC_mon_df as sheet 'mon'
-with pd.ExcelWriter(os.path.join(Other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
     EC_mon_df.to_excel(writer, sheet_name='mon', index=False)
 
 # Calculate the annual average 'ECf_Val' for each 'SiteName', 'Latitude', 'Longitude'
@@ -968,9 +968,56 @@ EC_annual_df = EC_mon_df.groupby(['SiteName', 'Latitude', 'Longitude'])['EC_mon'
 EC_annual_df.columns = ['SiteName', 'Latitude', 'Longitude', 'EC_annual']
 
 # Save the annual DataFrame as 'annual'
-with pd.ExcelWriter(os.path.join(Other_obs_dir + 'IMPROVE_EC_Summary.xlsx', engine='openpyxl', mode='a') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='a') as writer:
     EC_annual_df.to_excel(writer, sheet_name='annual', index=False)
 
+################################################################################################
+# Other: Summarize EMEP EC data
+################################################################################################
+
+other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+EMEP_dir = other_obs_dir + '/EMEP_EC_2019_raw/'
+
+# Initialize empty lists to store extracted information
+EC_df = []
+
+# Initialize counters
+processed_files = 0
+
+# Iterate through each file in the directory
+for filename in os.listdir(EMEP_dir):
+# Exclude files starting with '.'
+    if
+not filename.startswith('.'):
+if filename.endswith('.nas'):
+    processed_files += 1  # Increment processed files counter
+file_path = os.path.join(EMEP_dir, filename)
+with open(file_path, 'r', encoding='latin-1') as file:
+    lines = file.readlines()
+
+# Extract required information
+station_name = next((line.split(':')[1].strip() for line in lines if line.startswith('Station name:')), "")
+latitude = next((line.split(':')[1].strip() for line in lines if line.startswith('Station latitude:')), "")
+longitude = next((line.split(':')[1].strip() for line in lines if line.startswith('Station longitude:')), "")
+component = next((line.split(':')[1].strip() for line in lines if line.startswith('Component:')), "")
+unit = next((line.split(':')[1].strip() for line in lines if line.startswith('Unit:')), "")
+analytical_measurement_technique = next(
+    (line.split(':')[1].strip() for line in lines if line.startswith('Analytical measurement technique:')), "")
+# print(station_name, latitude, longitude)
+
+# Append extracted information to EC_df list
+EC_df.append([filename, station_name, latitude, longitude, component, unit, analytical_measurement_technique])
+
+# Convert the list of lists into a DataFrame
+df = pd.DataFrame(EC_df, columns=['Filename', 'Station Name', 'Latitude', 'Longitude', 'Component', 'Unit',
+                                  'Analytical_Measurement_Technique'])
+
+# Save the DataFrame as an Excel file
+with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
+    df.to_excel(writer, index=False)
+
+# Print the counts
+print(f"Processed files: {processed_files}")
 
 ################################################################################################
 # Other measurements 1: Combine measurement and GCHP dataset based on lat/lon
