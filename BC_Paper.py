@@ -811,7 +811,6 @@ city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city
 sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
 
 # Classify 'city' based on 'region'
-
 def get_region_for_city(city):
     for region, cities in region_mapping.items():
         if city in cities:
@@ -1323,3 +1322,60 @@ cbar.ax.tick_params(axis='y', labelsize=14)
 
 plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
+
+################################################################################################
+# SPARTAN HIPS vs UV-Vis
+################################################################################################
+# Set the directory path
+HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
+UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
+################################################################################################
+# Combine HIPS and UV-Vis dataset, set site as country and city
+################################################################################################
+# Create an empty dataframe to store the combined data
+combined_df = pd.DataFrame()
+
+# Read the HIPS_df
+HIPS_df = pd.read_excel(out_dir + 'BC_HIPS_SPARTAN.xlsx', sheet_name='All',
+                        usecols=['FilterID', 'mass_ug', 'Volume_m3', 'BC_HIPS_ug', 'Site', 'Country', 'City'])
+HIPS_count = HIPS_df.groupby('Site').size().reset_index(name='HIPS_count')
+
+# Read the UV-Vis data from Analysis_ALL
+UV_df = pd.read_excel(os.path.join(UV_dir, 'BC_UV-Vis_SPARTAN_Joshin_20230510.xlsx'), usecols=['Filter ID', 'f_BC', 'Location ID'])
+# Drop the last two digits in the "Filter ID" column: 'AEAZ-0113-1' to 'AEAZ-0113'
+UV_df['FilterID'] = UV_df['Filter ID'].str[:-2]
+UV_df.rename(columns={'Location ID': 'Site'}, inplace=True)
+# Count the number of rows for each site
+UV_count = UV_df.groupby('Site').size().reset_index(name='UV_count')
+
+# Merge DataFrames
+merged_df = pd.merge(UV_df, HIPS_df, on=['FilterID'], how='inner')
+
+# Convert the relevant columns to numeric to handle any non-numeric values
+merged_df['BC_HIPS_ug'] = pd.to_numeric(merged_df['BC_HIPS_ug'], errors='coerce')
+merged_df['f_BC'] = pd.to_numeric(merged_df['f_BC'], errors='coerce')
+merged_df['mass_ug'] = pd.to_numeric(merged_df['mass_ug'], errors='coerce')
+merged_df['Volume_m3'] = pd.to_numeric(merged_df['Volume_m3'], errors='coerce')
+
+# Calculate BC mass
+merged_df['BC_UV-Vis_ug'] = merged_df['f_BC'] * merged_df['mass_ug']
+
+# Calculate BC concentrations
+merged_df['BC_HIPS_(ug/m3)'] = merged_df['BC_HIPS_ug'] / merged_df['Volume_m3']
+merged_df['BC_UV-Vis_(ug/m3)'] = merged_df['f_BC'] * merged_df['mass_ug'] / merged_df['Volume_m3']
+
+# Calculate BC fractions
+merged_df.rename(columns={'f_BC': 'f_BC_UV-Vis'}, inplace=True)
+merged_df['f_BC_HIPS'] = merged_df['BC_HIPS_ug'] / merged_df['mass_ug']
+
+# Drop the "Site_y" column
+merged_df.drop('Site_y', axis=1, inplace=True)
+# Rename the "Site_x" column to "Site"
+merged_df.rename(columns={'Site_x': 'Site'}, inplace=True)
+
+# Write the merged data to separate sheets in an Excel file
+with pd.ExcelWriter(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'), engine='openpyxl') as writer:
+    # Write the merged data
+    merged_df.to_excel(writer, sheet_name='HIPS_UV-Uis', index=False)
+

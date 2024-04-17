@@ -6,11 +6,10 @@ import shutil
 ################################################################################################
 # Copy R and T from 'Joshin UV Vis Filter Dataset/'
 ################################################################################################
-
 # Define source and destination root directories
-source_root = "/Users/renyuxuan/Desktop/Research/Black_Carbon/Joshin UV Vis Filter Dataset/"
-destination_root_r = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Reflectance/"
-destination_root_t = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Transmittance/"
+source_root = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Joshin UV Vis Filter Dataset/'
+destination_root_r = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Reflectance/'
+destination_root_t = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Transmittance/'
 
 # Function to copy files from source to destination directory
 def copy_files(source_dir, destination_dir):
@@ -53,11 +52,9 @@ for subdir in os.listdir(source_root):
 ################################################################################################
 # Average together all the files under the "Blank" folder
 ################################################################################################
-
-
 # Define the directory paths for reflectance and transmittance blank folders
-blank_reflectance_folder = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Reflectance/Blank"
-blank_transmittance_folder = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Transmittance/Blank"
+blank_reflectance_folder = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Reflectance/Blank'
+blank_transmittance_folder = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Transmittance/Blank'
 
 def average_blank_files(folder_path, output_file_name):
     # Initialize an empty list to hold DataFrames
@@ -90,18 +87,17 @@ def average_blank_files(folder_path, output_file_name):
     return averaged_df, file_count
 
 # Average blank files for reflectance
-average_blank_files(blank_reflectance_folder, "Average_BLANK_R.csv")
+average_blank_files(blank_reflectance_folder, "Average_Blank_R.csv")
 
 # Average blank files for transmittance
-average_blank_files(blank_transmittance_folder, "Average_BLANK_T.csv")
+average_blank_files(blank_transmittance_folder, "Average_Blank_T.csv")
 
 ################################################################################################
 # Calculate MAC and babs
 ################################################################################################
-
 # Define the directories
-r_dir = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Reflectance/"
-t_dir = "/Users/renyuxuan/Desktop/Research/Black_Carbon/BC_BrC_UV-Vis/Transmittance/"
+r_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Reflectance/'
+t_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/Transmittance/'
 mass_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 
 # Load the blank reflectance and transmittance data
@@ -124,7 +120,7 @@ for filename in os.listdir(mass_dir):
             mass_df['mass_ug'] = pd.to_numeric(mass_df['mass_ug'], errors='coerce')
             mass_df['Volume_m3'] = pd.to_numeric(mass_df['Volume_m3'], errors='coerce')
             mass_df = mass_df.dropna(subset=['mass_ug'])
-            mass_df['PM_conc_(ug/m3)'] = mass_df['mass_ug'] / mass_df['Volume_m3']
+            mass_df['PM_conc'] = mass_df['mass_ug'] / mass_df['Volume_m3']
             site_name = filename.split('_')[0]
             mass_df["Site"] = [site_name] * len(mass_df)
             mass_dfs.append(mass_df)
@@ -137,7 +133,6 @@ print("All mass DataFrames concatenated.")
 # Create a dictionary to store r_df and t_df for each filter ID
 rt_dict = {}
 
-# Populate the dictionary with r_df and t_df for each filter ID
 for filename in os.listdir(r_dir):
     if 'Sample.Raw' in filename:
         # Extract site and filter_id from filename
@@ -152,7 +147,7 @@ for filename in os.listdir(r_dir):
                 rt_dict[filter_id] = (r_df, t_df)
                 break  # Exit inner loop once matching t_df is found
 
-# Initialize lists for MAC and babs
+# Initialize dfs for MAC and babs
 MAC_r_dfs = []
 babs_dfs = []
 
@@ -168,11 +163,11 @@ for idx, row in mass_df.iterrows():
 
     # Proceed only if both r_df and t_df are found
     if r_df is not None and t_df is not None:
-        # Calculate relative reflectance
+        # Normalize r based on blanks
         relative_r = r_df.div(r_black_df.values.squeeze(), axis=0)
         relative_r = np.clip(relative_r, None, 0.99999999)
 
-        # Calculate relative transmittance
+        # Normalize t based on blanks
         t_black_df = t_black_df.reindex(t_df.index)
         relative_t = t_df.div(t_black_df.values.squeeze(), axis=0)
         relative_t = np.clip(relative_t, None, 0.99999999)
@@ -180,8 +175,6 @@ for idx, row in mass_df.iterrows():
         # Calculate optical density
         ODs = np.log((1 - relative_r) / relative_t)
         ODs = np.abs(ODs)
-
-
 
         # Calculate MAC_r and babs
         MAC_r = ((0.48 * (ODs ** 1.32)) / row['mass_ug']) * (np.pi * (d ** 2) / 4) * 1e6
@@ -198,7 +191,6 @@ print("All MAC and babs DataFrames concatenated.")
 
 # Calculate other parameters
 f_BC = (babs_df[babs_df['nm'] == 900] / mass_df['PM_conc_(ug/m3)']) / 4.58
-
 
 # Create DataFrame with required columns
 result_df = pd.DataFrame({
