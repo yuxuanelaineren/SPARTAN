@@ -1,84 +1,91 @@
 import os
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import pandas as pd
+import numpy as np
+from matplotlib.colors import ListedColormap
+import matplotlib.colors as mcolors
 import seaborn as sns
 from scipy import stats
-import numpy as np
 
+################################################################################################
+# SPARTAN HIPS vs UV-Vis
+################################################################################################
 # Set the directory path
 HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
+IBR_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Black_Carbon/IBR_by_site/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
+
 ################################################################################################
-# Create scatter plot for all sites
+# calculate IBR BC
 ################################################################################################
 
-# Read the file
-merged_df = pd.read_excel(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'))
+# Constants
+q = 1.5 # thickness
+filter_surface_area = 3.142  # cm^2
+absorption_cross_section = 0.060  # cm^2/ug, 0.1 in SOP, 0.075 for AEAZ
 
-# Drop rows where f_BC is greater than 1
-merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
+# Define a function to calculate EBC (ug)
+def calculate_ebc(row):
+    normalized_r = row['normalized_r']
+    if normalized_r > 0:  # Check if normalized_r is positive
+        return  -filter_surface_area / (q * absorption_cross_section) * np.log(normalized_r / 1)
+    else:
+        return np.nan  # Replace invalid values with NaN
 
-# Rename to simplify coding
-merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
-merged_df.rename(columns={"BC_UV-Vis_(ug/m3)": "UV-Vis"}, inplace=True)
-merged_df.rename(columns={"City": "city"}, inplace=True)
+# Initialize an empty DataFrame to store the combined data
+IBR_df = pd.DataFrame()
 
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+# Loop through each subfolder in the specified directory
+for subfolder in os.listdir(IBR_dir):
+    subfolder_path = os.path.join(IBR_dir, subfolder)
+    # Check if the subfolder is a directory
+    if os.path.isdir(subfolder_path):
+        # Look for Excel files in the subfolder
+        for file in os.listdir(subfolder_path):
+            # Skip files starting with a dot
+            if file.startswith('.') or file.startswith('~'):
+                continue
+            if file.endswith('_IBR.xlsx'):
+                # Extract site name from the file name
+                site_name = file.split('_')[0]
+                print(site_name)
+                # Read the Excel file
+                excel_path = os.path.join(subfolder_path, file)
+                df = pd.read_excel(excel_path, engine='openpyxl', header=7)
+                # Extract required columns
+                df.columns = df.columns.str.strip()  # Remove leading/trailing whitespace
+                required_columns = ['Cartridge ID', 'Sample ID#', 'Reflectance']
+                df = df[required_columns]
+                # Drop rows with blank values in 'Reflectance' column
+                df.dropna(subset=['Reflectance'], inplace=True)
+                # Add 'site' column with site name
+                df['site'] = site_name
+                # Concatenate data with the combined DataFrame
+                IBR_df = pd.concat([IBR_df, df])
 
-# Create scatter plot with white background, black border, and no grid
-sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='HIPS', y='UV-Vis', data=merged_df, s=50, alpha=1, ax=ax, edgecolor='k')
-scatterplot.set_facecolor('white')  # set background color to white
-border_width = 1
-for spine in scatterplot.spines.values():
-    spine.set_edgecolor('black')  # set border color to black
-    spine.set_linewidth(border_width)  # set border width
-scatterplot.grid(False)  # remove the grid
+# Write the merged data to separate sheets in an Excel file
+with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False, engine='openpyxl') as writer:
+    # Write the merged data
+    IBR_df.to_excel(writer, sheet_name='raw', index=False)
 
-# legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=10)
-# legend.get_frame().set_linewidth(0.0)
+# Normalize 'Reflectance' for each 'Cartridge ID'
+IBR_df = IBR_df.copy()
+# IBR_df = pd.read_excel(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'))
+for cart_id, group in IBR_df.groupby('Cartridge ID'):
+    print(cart_id)
+    # Find the 'Reflectance' value for 'Sample ID#' ending with '-7'
+    ref_7 = group.loc[group['Sample ID#'].str.endswith('-7'), 'Reflectance'].iloc[0]
+    # Calculate normalized 'Reflectance' values for other 'Sample ID#'s
+    group['normalized_r'] = group['Reflectance'] / ref_7
+    # Calculate EBC (ug) for each row
+    group['EBC_ug'] = group.apply(calculate_ebc, axis=1)
 
-# Set title, xlim, ylim, ticks, labels
-plt.xlim([merged_df['HIPS'].min()-0.5, 20])
-plt.ylim([merged_df['HIPS'].min()-0.5, 20])
-plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+    # Update the DataFrame with the calculated EBC values
+    IBR_df.loc[group.index, 'normalized_r'] = group['normalized_r']
+    IBR_df.loc[group.index, 'EBC_ug'] = group['EBC_ug']
 
-# Add 1:1 line with black dash
-x = merged_df['HIPS']
-y = merged_df['HIPS']
-plt.plot([merged_df['HIPS'].min(), merged_df['HIPS'].max()], [merged_df['HIPS'].min(), merged_df['HIPS'].max()], color='grey', linestyle='--', linewidth=1)
-
-# Add number of data points to the plot
-num_points = len(merged_df)
-plt.text(0.1, 0.7, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=22)
-
-# Perform linear regression with NaN handling
-mask = ~np.isnan(merged_df['HIPS']) & ~np.isnan(merged_df['UV-Vis'])
-slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['HIPS'][mask], merged_df['UV-Vis'][mask])
-# Check for NaN in results
-if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
-    print("Linear regression results contain NaN values. Check the input data.")
-else:
-    # Add linear regression line and text
-    sns.regplot(x='HIPS', y='UV-Vis', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
-    # Change the sign of the intercept for display
-    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
-
-    # Update the text line with the adjusted intercept
-    plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=22)
-
-plt.xlabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-
-# show the plot
-plt.tight_layout()
-# plt.savefig(os.path.join(Out_dir_path, "BC_Concentration_Comparison_HIPS_SSR.tiff"), format="TIFF", dpi=300)
-plt.show()
+# Write the combined data with normalized 'Reflectance' to a new Excel file
+with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False, engine='openpyxl') as writer:
+    # Write the merged data
+    IBR_df.to_excel(writer, sheet_name='IBR_EBC', index=False)

@@ -1324,11 +1324,12 @@ plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.ti
 plt.show()
 
 ################################################################################################
-# SPARTAN HIPS vs UV-Vis
+# SPARTAN HIPS vs UV-Vis vs IBR
 ################################################################################################
 # Set the directory path
 HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
+IBR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
 ################################################################################################
 # Combine HIPS and UV-Vis dataset, set site as country and city
@@ -1343,6 +1344,7 @@ HIPS_count = HIPS_df.groupby('Site').size().reset_index(name='HIPS_count')
 
 # Read the UV-Vis data from Analysis_ALL
 UV_df = pd.read_excel(os.path.join(UV_dir, 'BC_UV-Vis_SPARTAN_Joshin_20230510.xlsx'), usecols=['Filter ID', 'f_BC', 'Location ID'])
+# IBR_df = pd.read_excel(os.path.join(IBR_dir, 'BC_IBR_SPARTAN.xlsx'), usecols=['Sample ID#', 'EBC_ug'])
 # Drop the last two digits in the "Filter ID" column: 'AEAZ-0113-1' to 'AEAZ-0113'
 UV_df['FilterID'] = UV_df['Filter ID'].str[:-2]
 UV_df.rename(columns={'Location ID': 'Site'}, inplace=True)
@@ -1364,10 +1366,13 @@ merged_df['BC_UV-Vis_ug'] = merged_df['f_BC'] * merged_df['mass_ug']
 # Calculate BC concentrations
 merged_df['BC_HIPS_(ug/m3)'] = merged_df['BC_HIPS_ug'] / merged_df['Volume_m3']
 merged_df['BC_UV-Vis_(ug/m3)'] = merged_df['f_BC'] * merged_df['mass_ug'] / merged_df['Volume_m3']
-
+# merged_df['BC_IBR_(ug/m3)'] = merged_df['BC_IBR_ug'] / merged_df['Volume_m3']
 # Calculate BC fractions
 merged_df.rename(columns={'f_BC': 'f_BC_UV-Vis'}, inplace=True)
 merged_df['f_BC_HIPS'] = merged_df['BC_HIPS_ug'] / merged_df['mass_ug']
+# merged_df['f_BC_IBR'] = merged_df['BC_IBR_ug'] / merged_df['mass_ug']
+# Drop rows where IBR BC < 0
+# merged_df = merged_df.loc[merged_df['BC_IBR_ug'] > 0]
 
 # Drop the "Site_y" column
 merged_df.drop('Site_y', axis=1, inplace=True)
@@ -1379,22 +1384,9 @@ with pd.ExcelWriter(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'), engine
     # Write the merged data
     merged_df.to_excel(writer, sheet_name='HIPS_UV-Uis', index=False)
 
-import os
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-from matplotlib.colors import ListedColormap
-import matplotlib.colors as mcolors
-import seaborn as sns
-from scipy import stats
-
-# Set the directory path
-HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
-UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
 
 ################################################################################################
-# HIPS vs UV-Vis, color cell by no. of pairs
+# plot HIPS vs UV-Vis, color cell by no. of pairs
 ################################################################################################
 
 # Read the file
@@ -1437,7 +1429,7 @@ cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 cbar.set_ticks([0, 5, 10, 15, 20])
 # Display the original data points as a scatter plot
-# plt.scatter(x, y, color='black', s=10, alpha=0.5)
+# plt.scatter(merged_df['HIPS'], merged_df['IBR'], color='black', s=10, alpha=0.5)
 
 # Set title, xlim, ylim, ticks, labels
 plt.xlim([merged_df['HIPS'].min()-0.5, 17])
@@ -1479,3 +1471,72 @@ plt.ylabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='
 plt.tight_layout()
 # plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
 plt.show()
+
+
+################################################################################################
+# calculate IBR BC
+################################################################################################
+
+# Constants
+q = 0.6666667
+filter_surface_area = 3.142  # cm^2
+absorption_cross_section = 0.060  # cm^2/ug
+
+# Define a function to calculate EBC (ug)
+def calculate_ebc(row):
+    normalized_r = row['normalized_r']
+    if normalized_r > 0:  # Check if normalized_r is positive
+        return q * filter_surface_area / absorption_cross_section * np.log(1 / normalized_r)
+    else:
+        return np.nan  # Replace invalid values with NaN
+
+
+# Initialize an empty DataFrame to store the combined data
+IBR_df = pd.DataFrame()
+
+# Loop through each subfolder in the specified directory
+for subfolder in os.listdir(IBR_dir):
+    subfolder_path = os.path.join(IBR_dir, subfolder)
+    # Check if the subfolder is a directory
+    if os.path.isdir(subfolder_path):
+        # Look for Excel files in the subfolder
+        for file in os.listdir(subfolder_path):
+            # Skip files starting with a dot
+            if file.startswith('.') or file.startswith('~'):
+                continue
+            if file.endswith('_IBR.xlsx'):
+                # Extract site name from the file name
+                site_name = file.split('_')[0]
+                print(site_name)
+                # Read the Excel file
+                excel_path = os.path.join(subfolder_path, file)
+                df = pd.read_excel(excel_path, engine='openpyxl', header=7)
+                # Extract required columns
+                df.columns = df.columns.str.strip()  # Remove leading/trailing whitespace
+                required_columns = ['Cartridge ID', 'Sample ID#', 'Reflectance']
+                df = df[required_columns]
+                # Drop rows with blank values in 'Reflectance' column
+                df.dropna(subset=['Reflectance'], inplace=True)
+                # Add 'site' column with site name
+                df['site'] = site_name
+                # Concatenate data with the combined DataFrame
+                IBR_df = pd.concat([IBR_df, df])
+
+# Normalize 'Reflectance' for each 'Cartridge ID'
+IBR_df = IBR_df.copy()
+for cart_id, group in IBR_df.groupby('Cartridge ID'):
+    # Find the 'Reflectance' value for 'Sample ID#' ending with '-7'
+    ref_7 = group.loc[group['Sample ID#'].str.endswith('-7'), 'Reflectance'].iloc[0]
+    # Calculate normalized 'Reflectance' values for other 'Sample ID#'s
+    group['normalized_r'] = group['Reflectance'] / ref_7
+    # Calculate EBC (ug) for each row
+    group['EBC_ug'] = group.apply(calculate_ebc, axis=1)
+
+    # Update the DataFrame with the calculated EBC values
+    IBR_df.loc[group.index, 'normalized_r'] = group['normalized_r']
+    IBR_df.loc[group.index, 'EBC_ug'] = group['EBC_ug']
+    IBR_df.loc[group.index, 'FilterID'] = group['Sample ID#'].str[:-2]
+
+# Write the combined data with normalized 'Reflectance' to a new Excel file
+IBR_df.to_excel(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False)
+

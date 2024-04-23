@@ -20,23 +20,22 @@ import seaborn as sns
 from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
-
-
-cres = 'C360'
+cres = 'C720'
 year = 2018
 species = 'BC'
 inventory = 'HTAP'
 deposition = 'LUO'
 
 # Set the directory path
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
 # sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
 # sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
 # sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+
 ################################################################################################
 # Create scatter plot for annual data (color blue and red) with one line
 ################################################################################################
@@ -50,8 +49,8 @@ for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.4]
-x_range_2 = [2.4, compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 1.5]
+x_range_2 = [1.5, compr_df['obs'].max()]
 x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
 
 # Define custom blue and red colors
@@ -193,6 +192,6 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'FigS3_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_201807_MonMean.svg'.format(cres, inventory, deposition, species), dpi=300)
+plt.savefig(out_dir + 'FigS3_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}07_MonMean.svg'.format(cres, inventory, deposition, species), dpi=300)
 
 plt.show()
