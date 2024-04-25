@@ -101,10 +101,10 @@ if __name__ == "__main__":
     site_counts = obs_df.groupby('Site')['FilterID'].count()
     for site, count in site_counts.items():
         print(f"{site}: {count} rows")
-    summary_df = obs_df.groupby(['Country', 'City'])['BC'].agg(['count', 'mean', 'std'])
+    summary_df = obs_df.groupby(['Country', 'City'])['BC'].agg(['count', 'mean', 'median', 'std'])
     summary_df['stderr'] = summary_df['std'] / np.sqrt(summary_df['count']).pow(0.5)
-    summary_df.rename(columns={'count': 'num_obs', 'mean': 'bc_mean', 'std': 'bc_stdv', 'stderr': 'bc_stderr'},
-                      inplace=True)
+    summary_df.rename(columns={'count': 'num_obs', 'mean': 'bc_mean', 'median': 'bc_median', 'std': 'bc_stdv', 'stderr': 'bc_stderr'},
+        inplace=True)
     with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_SPARTAN.xlsx"), engine='openpyxl', mode='a') as writer:
         summary_df.to_excel(writer, sheet_name='Summary', index=True)
 
