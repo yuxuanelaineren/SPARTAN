@@ -1,56 +1,151 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
+import calendar
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs  # cartopy must be >=0.19
+import xarray as xr
+import cartopy.feature as cfeature
 import pandas as pd
+from gamap_colormap import WhGrYlRd
+import calendar
 import numpy as np
-from matplotlib.colors import ListedColormap
-import matplotlib.colors as mcolors
+from scipy.spatial.distance import cdist
+import geopandas as gpd
+from shapely.geometry import Point
+from shapely.ops import nearest_points
+from matplotlib import font_manager
 import seaborn as sns
 from scipy import stats
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.colors as mcolors
 
-################################################################################################
-# SPARTAN HIPS vs UV-Vis
-################################################################################################
+cres = 'C360'
+year = 2019
+species = 'BC'
+inventory = 'CEDS'
+deposition = 'noLUO'
+
 # Set the directory path
-HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
-UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
-IBR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
-
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
+obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Combine HIPS and UV-Vis dataset, set site as country and city
+# Other: Map SPARTAN and GCHP data for the entire year
 ################################################################################################
-# Create an empty dataframe to store the combined data
-combined_df = pd.DataFrame()
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(12, 5))
+left = 0.03  # Adjust the left position
+bottom = 0.01  # Adjust the bottom position
+width = 0.94  # Adjust the width
+height = 0.9  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 
-# Read the HIPS_df
-HIPS_df = pd.read_excel(out_dir + 'BC_HIPS_SPARTAN.xlsx', sheet_name='All',
-                        usecols=['FilterID', 'mass_ug', 'Volume_m3', 'BC_HIPS_ug', 'Site', 'Country', 'City'])
+# Define the colormap
+# Define the custom color scheme gradient
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
-# Read the UV-Vis data from Analysis_ALL
-IBR_df = pd.read_excel(os.path.join(IBR_dir, 'BC_IBR_SPARTAN.xlsx'), usecols=['Sample ID#', 'EBC_ug'])
-# Drop the last two digits in the "Filter ID" column: 'AEAZ-0113-1' to 'AEAZ-0113'
-IBR_df['FilterID'] = IBR_df['Sample ID#'].str[:-2]
-# Merge DataFrames
-merged_df = pd.merge(IBR_df, HIPS_df, on=['FilterID'], how='inner')
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
-# Convert the relevant columns to numeric to handle any non-numeric values
-merged_df['BC_HIPS_ug'] = pd.to_numeric(merged_df['BC_HIPS_ug'], errors='coerce')
-merged_df['BC_IBR_ug'] = pd.to_numeric(merged_df['EBC_ug'], errors='coerce')
-merged_df['mass_ug'] = pd.to_numeric(merged_df['mass_ug'], errors='coerce')
-merged_df['Volume_m3'] = pd.to_numeric(merged_df['Volume_m3'], errors='coerce')
+vmax = 4  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
-# Calculate BC concentrations
-merged_df['BC_HIPS_(ug/m3)'] = merged_df['BC_HIPS_ug'] / merged_df['Volume_m3']
-merged_df['BC_IBR_(ug/m3)'] = merged_df['BC_IBR_ug'] / merged_df['Volume_m3']
+# Accumulate data for each face over the year
+annual_v = None
 
-# Calculate BC fractions
-merged_df['f_BC_HIPS'] = merged_df['BC_HIPS_ug'] / merged_df['mass_ug']
-merged_df['f_BC_IBR'] = merged_df['BC_IBR_ug'] / merged_df['mass_ug']
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
+            engine='netcdf4') # CEDS
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
+        if annual_v is None:
+            annual_v = v
+        else:
+            annual_v = annual_v + v
 
-# Drop rows where IBR BC < 0
-merged_df = merged_df.loc[merged_df['BC_IBR_ug'] > 0]
+    # Calculate the annual average
+    annual_v /= 12
+    annual_v = annual_v.squeeze()
+    print(x.shape, y.shape, annual_v.shape)
 
-# Write the merged data to separate sheets in an Excel file
-with pd.ExcelWriter(os.path.join(out_dir, 'BC_HIPS_IBR_SPARTAN.xlsx'), engine='openpyxl') as writer:
-    # Write the merged data
-    merged_df.to_excel(writer, sheet_name='HIPS_IBR', index=False)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
+
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
+
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+ax.text(0.4, 0.12, f'Sim = 1.77 ± 1.84 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = 3.19 ± 2.49 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.9, 0.05, f'2019', fontsize=16, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+
+# Create an inset axes for the color bar at the left middle of the plot
+cbar_axes = inset_axes(ax,
+                           width='2%',
+                           height='50%',
+                           bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+font_properties = font_manager.FontProperties(family='Arial', size=14)
+cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=14)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
+
+plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.show()

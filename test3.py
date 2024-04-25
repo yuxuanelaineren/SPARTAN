@@ -1,91 +1,138 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
+import calendar
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs  # cartopy must be >=0.19
+import xarray as xr
+import cartopy.feature as cfeature
 import pandas as pd
+from gamap_colormap import WhGrYlRd
+import calendar
 import numpy as np
-from matplotlib.colors import ListedColormap
-import matplotlib.colors as mcolors
+from scipy.spatial.distance import cdist
+import geopandas as gpd
+from shapely.geometry import Point
+from shapely.ops import nearest_points
+from matplotlib import font_manager
 import seaborn as sns
 from scipy import stats
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.colors as mcolors
 
-################################################################################################
-# SPARTAN HIPS vs UV-Vis
-################################################################################################
+cres = 'C360'
+year = 2019
+species = 'BC'
+inventory = 'CEDS'
+deposition = 'noLUO'
+
 # Set the directory path
-HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
-UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
-IBR_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Black_Carbon/IBR_by_site/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
-
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
+obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# calculate IBR BC
+# Other: Map SPARTAN and GCHP data for the entire year
 ################################################################################################
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(12, 5))
+left = 0.03  # Adjust the left position
+bottom = 0.01  # Adjust the bottom position
+width = 0.94  # Adjust the width
+height = 0.9  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+# ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([6, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# Define the colormap
+# Define the custom color scheme gradient
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
-# Constants
-q = 1.5 # thickness
-filter_surface_area = 3.142  # cm^2
-absorption_cross_section = 0.060  # cm^2/ug, 0.1 in SOP, 0.075 for AEAZ
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
-# Define a function to calculate EBC (ug)
-def calculate_ebc(row):
-    normalized_r = row['normalized_r']
-    if normalized_r > 0:  # Check if normalized_r is positive
-        return  -filter_surface_area / (q * absorption_cross_section) * np.log(normalized_r / 1)
-    else:
-        return np.nan  # Replace invalid values with NaN
+vmax = 4  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
-# Initialize an empty DataFrame to store the combined data
-IBR_df = pd.DataFrame()
+# Accumulate data for each face over the year
+annual_v = None
 
-# Loop through each subfolder in the specified directory
-for subfolder in os.listdir(IBR_dir):
-    subfolder_path = os.path.join(IBR_dir, subfolder)
-    # Check if the subfolder is a directory
-    if os.path.isdir(subfolder_path):
-        # Look for Excel files in the subfolder
-        for file in os.listdir(subfolder_path):
-            # Skip files starting with a dot
-            if file.startswith('.') or file.startswith('~'):
-                continue
-            if file.endswith('_IBR.xlsx'):
-                # Extract site name from the file name
-                site_name = file.split('_')[0]
-                print(site_name)
-                # Read the Excel file
-                excel_path = os.path.join(subfolder_path, file)
-                df = pd.read_excel(excel_path, engine='openpyxl', header=7)
-                # Extract required columns
-                df.columns = df.columns.str.strip()  # Remove leading/trailing whitespace
-                required_columns = ['Cartridge ID', 'Sample ID#', 'Reflectance']
-                df = df[required_columns]
-                # Drop rows with blank values in 'Reflectance' column
-                df.dropna(subset=['Reflectance'], inplace=True)
-                # Add 'site' column with site name
-                df['site'] = site_name
-                # Concatenate data with the combined DataFrame
-                IBR_df = pd.concat([IBR_df, df])
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
+            engine='netcdf4') # CEDS
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
+        if annual_v is None:
+            annual_v = v
+        else:
+            annual_v = annual_v + v
 
-# Write the merged data to separate sheets in an Excel file
-with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False, engine='openpyxl') as writer:
-    # Write the merged data
-    IBR_df.to_excel(writer, sheet_name='raw', index=False)
+    # Calculate the annual average
+    annual_v /= 12
+    annual_v = annual_v.squeeze()
+    print(x.shape, y.shape, annual_v.shape)
 
-# Normalize 'Reflectance' for each 'Cartridge ID'
-IBR_df = IBR_df.copy()
-# IBR_df = pd.read_excel(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'))
-for cart_id, group in IBR_df.groupby('Cartridge ID'):
-    print(cart_id)
-    # Find the 'Reflectance' value for 'Sample ID#' ending with '-7'
-    ref_7 = group.loc[group['Sample ID#'].str.endswith('-7'), 'Reflectance'].iloc[0]
-    # Calculate normalized 'Reflectance' values for other 'Sample ID#'s
-    group['normalized_r'] = group['Reflectance'] / ref_7
-    # Calculate EBC (ug) for each row
-    group['EBC_ug'] = group.apply(calculate_ebc, axis=1)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-    # Update the DataFrame with the calculated EBC values
-    IBR_df.loc[group.index, 'normalized_r'] = group['normalized_r']
-    IBR_df.loc[group.index, 'EBC_ug'] = group['EBC_ug']
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
 
-# Write the combined data with normalized 'Reflectance' to a new Excel file
-with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False, engine='openpyxl') as writer:
-    # Write the merged data
-    IBR_df.to_excel(writer, sheet_name='IBR_EBC', index=False)
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
+
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+# ax.text(0.4, 0.12, f'Sim = 1.77 ± 1.84 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.4, 0.05, f'Obs = 3.19 ± 2.49 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.9, 0.03, f'2019', fontsize=16, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+
+
+plt.savefig(out_dir + 'FigS1_China_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.show()

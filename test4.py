@@ -1,104 +1,155 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
+import calendar
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs  # cartopy must be >=0.19
+import xarray as xr
+import cartopy.feature as cfeature
 import pandas as pd
+from gamap_colormap import WhGrYlRd
+import calendar
 import numpy as np
-from matplotlib.colors import ListedColormap
-import matplotlib.colors as mcolors
+from scipy.spatial.distance import cdist
+import geopandas as gpd
+from shapely.geometry import Point
+from shapely.ops import nearest_points
+from matplotlib import font_manager
 import seaborn as sns
 from scipy import stats
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.colors import LinearSegmentedColormap
 
-################################################################################################
-# SPARTAN HIPS vs UV-Vis
-################################################################################################
+
+cres = 'C360'
+year = 2019
+species = 'BC'
+inventory = 'CEDS'
+deposition = 'noLUO'
+
 # Set the directory path
-HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
-UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
-IBR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
+# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
+# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
+obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# plot HIPS vs UV-Vis, color cell by no. of pairs
+# Map SPARTAN and GCHP data for the entire year
 ################################################################################################
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(12, 5))
+left = 0.03  # Adjust the left position
+bottom = 0.01  # Adjust the bottom position
+width = 0.94  # Adjust the width
+height = 0.9  # Adjust the height
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 
-# Read the file
-merged_df = pd.read_excel(os.path.join(out_dir, 'BC_HIPS_IBR_SPARTAN.xlsx'))
+# Define the colormap
+cmap = WhGrYlRd
+custom_cmap = cmap # Blue to red
 
-# Rename to simplify coding
-merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
-merged_df.rename(columns={"BC_IBR_(ug/m3)": "IBR"}, inplace=True)
-merged_df.rename(columns={"City": "city"}, inplace=True)
+# Define colormap (from white to dark red through yellow and orange)
+colors = ['#f7f7f7',   # light gray
+          '#ffff00',   # yellow
+          '#ffA500',   # orange
+          '#ff4500',   # red-orange
+          '#ff0000',   # red
+          '#8b0000',   # dark red
+          '#4d0000']   # even darker red
 
-# Create a 2D histogram to divide the area into squares and count data points in each square
-hist, xedges, yedges = np.histogram2d(merged_df['HIPS'], merged_df['IBR'], bins=100)
+# Create a LinearSegmentedColormap
+cmap_name = 'custom_heat'
+n_bins = 100  # Increase for smoother transition
+custom_cmap = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
 
-# Determine the color for each square based on the number of pairs
-colors = np.zeros_like(hist)
-for i in range(len(hist)):
-    for j in range(len(hist[i])):
-        pairs = hist[i][j]
-        colors[i][j] = pairs
+vmax = 8  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
-# Define the custom color scheme gradient
-colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
+# Accumulate data for each face over the year
+annual_v = None
 
-# Create a custom colormap using the gradient defined
-cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+for face in range(6):
+    for mon in range(1, 13):
+        sim_df = xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
+            engine='netcdf4') # CEDS
 
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+        sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+        sim_df['BC_SO4'] = sim_df['BC'] / sim_df['SO4']
+        sim_df['BC_PM25_NO3'] = sim_df['BC'] / (sim_df['PM25'] - sim_df['NIT'])
 
-# Plot the 2D histogram with the specified color scheme
-sns.set(font='Arial')
-scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
-# Display the original data points as a scatter plot
-# plt.scatter(merged_df['HIPS'], merged_df['IBR'], color='black', s=10, alpha=0.5)
+        x = sim_df.corner_lons.isel(nf=face)
+        y = sim_df.corner_lats.isel(nf=face)
+        v = sim_df[species].isel(nf=face)
 
-# Create the colorbar and specify font properties
-cbar = plt.colorbar(label='Number of Pairs')
-cbar.ax.yaxis.set_tick_params(labelsize=14)
-cbar.ax.set_ylabel('Number of Pairs', fontsize=16, fontname='Arial')
-cbar.outline.set_edgecolor('black')
-cbar.outline.set_linewidth(1)
-cbar.set_ticks([0, 5, 10, 15, 20])
+        if annual_v is None:
+            annual_v = v
+        else:
+            annual_v = annual_v + v
 
+    # Calculate the annual average
+    annual_v /= 12
+    annual_v = annual_v.squeeze()
+    print(x.shape, y.shape, annual_v.shape)
 
-# Set title, xlim, ylim, ticks, labels
-plt.xlim([merged_df['HIPS'].min()-0.5, 30])
-plt.ylim([merged_df['HIPS'].min()-0.5, 30])
-plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
-plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
-ax.tick_params(axis='x', direction='out', width=1, length=5)
-ax.tick_params(axis='y', direction='out', width=1, length=5)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_v, cmap=custom_cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-# Add 1:1 line with black dash
-x = merged_df['HIPS']
-y = merged_df['HIPS']
-plt.plot([merged_df['HIPS'].min(), merged_df['HIPS'].max()], [merged_df['HIPS'].min(), merged_df['HIPS'].max()], color='grey', linestyle='--', linewidth=1)
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
 
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Observation
+s2 = [120] * len(obs)  # outer ring: Simulation
 
-# Add number of data points to the plot
-num_points = len(merged_df)
-plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
+# Create scatter plot
+im = ax.scatter(x=lon, y=lat, c=obs, s=s1, transform=ccrs.PlateCarree(), cmap=custom_cmap, edgecolor='black',
+                linewidth=1, vmin=0, vmax=vmax, zorder=4)
+im = ax.scatter(x=lon, y=lat, c=sim, s=s2, transform=ccrs.PlateCarree(), cmap=custom_cmap, edgecolor='black',
+                linewidth=1, vmin=0, vmax=vmax, zorder=3)
 
-# Perform linear regression with NaN handling
-mask = ~np.isnan(merged_df['HIPS']) & ~np.isnan(merged_df['IBR'])
-slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['HIPS'][mask], merged_df['IBR'][mask])
-# Check for NaN in results
-if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
-    print("Linear regression results contain NaN values. Check the input data.")
-else:
-    # Add linear regression line and text
-    sns.regplot(x='HIPS', y='IBR', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
-    # Change the sign of the intercept for display
-    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
 
-    # Update the text line with the adjusted intercept
-    plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=18)
+# Display statistics as text annotations on the plot
+month_str = calendar.month_name[mon]
+ax.text(0.4, 0.12, f'Sim = {global_mean_sim:.2f} ± {global_std_sim:.2f}',
+        fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = {global_mean_obs:.2f} ± {global_std_obs:.2f}',
+        fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.9, 0.05, f'2019', fontsize=16, fontname='Arial', transform=ax.transAxes)
+plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN',
+            fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-plt.xlabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('IBR Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-# show the plot
-plt.tight_layout()
-# plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
+# Create an inset axes for the color bar at the left middle of the plot
+colorbar_axes = inset_axes(ax,
+                           width="2%",
+                           height="60%",
+                           bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=colorbar_axes, orientation="vertical")
+num_ticks = 5
+cbar.locator = plt.MaxNLocator(num_ticks)
+cbar.update_ticks()
+font_properties = font_manager.FontProperties(family='Arial', size=14)
+cbar.set_label(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=14)
+
+# plt.savefig(out_dir + 'Fig2_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()

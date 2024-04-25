@@ -20,7 +20,7 @@ import seaborn as sns
 from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
-
+import matplotlib.colors as mcolors
 
 cres = 'C360'
 year = 2019
@@ -601,7 +601,6 @@ plt.show()
 ################################################################################################
 # Create scatter plot for annual data (color blue and red)
 ################################################################################################
-
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
 compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
@@ -766,7 +765,6 @@ plt.tight_layout()
 # plt.savefig(out_dir + 'Fig1_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 
 plt.show()
-
 
 ################################################################################################
 # Create scatter plot for annual data (color blue and red) with one line
@@ -1067,7 +1065,7 @@ with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_Summary.xlsx'), engine=
 print(f"Processed files: {processed_files}")
 
 ################################################################################################
-# Other measurements 1: Combine measurement and GCHP dataset based on lat/lon
+# Other: Combine measurement and GCHP dataset based on lat/lon
 ################################################################################################
 
 # Function to find matching rows and add 'Country' and 'City'
@@ -1224,26 +1222,17 @@ ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
 ax.set_global()
 ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([6, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe
 
 # Define the colormap
-cmap = WhGrYlRd
-custom_cmap = cmap # Blue to red
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
-# Define colormap (from white to dark red through yellow and orange)
-colors = ['#f7f7f7',   # light gray
-          '#ffff00',   # yellow
-          '#ffA500',   # orange
-          '#ff4500',   # red-orange
-          '#ff0000',   # red
-          '#8b0000',   # dark red
-          '#4d0000']   # even darker red
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
-# Create a LinearSegmentedColormap
-cmap_name = 'custom_heat'
-n_bins = 100  # Increase for smoother transition
-custom_cmap = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
-
-vmax = 8  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+vmax = 4  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
 
 # Accumulate data for each face over the year
 annual_v = None
@@ -1253,8 +1242,6 @@ for face in range(6):
         sim_df = xr.open_dataset(
             sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
             engine='netcdf4') # CEDS
-
-        sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
         x = sim_df.corner_lons.isel(nf=face)
         y = sim_df.corner_lats.isel(nf=face)
         v = sim_df[species].isel(nf=face)
@@ -1269,10 +1256,10 @@ for face in range(6):
     print(x.shape, y.shape, annual_v.shape)
 
     # Plot the annual average data for each face
-    im = ax.pcolormesh(x, y, annual_v, cmap=custom_cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
 # Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, 'Other_Obs_SPARTAN_vs {}_{}_{}_Sim_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
                           sheet_name='Annual')
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
 lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
@@ -1283,14 +1270,26 @@ s1 = [40] * len(obs)  # inner circle: Observation
 s2 = [120] * len(obs)  # outer ring: Simulation
 markers = {'SPARTAN': 'o', 'other': 's'}
 
-# Create scatter plot
+# Create scatter plot for other data points (squares)
 for i, row in compar_notna.iterrows():
     source = row['source']
-    marker = markers.get(source, 'o')  # Default to circle if source is not found
-    plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=custom_cmap, zorder=4)
-    plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=custom_cmap, zorder=3)
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+
 # Calculate the global mean of simulated and observed data
 global_mean_sim = np.nanmean(sim)
 global_mean_obs = np.nanmean(obs)
@@ -1299,30 +1298,93 @@ global_std_obs = np.nanstd(obs)
 
 # Display statistics as text annotations on the plot
 month_str = calendar.month_name[mon]
-ax.text(0.4, 0.12, f'Sim = 1.85 ± 1.84', fontsize=16, fontname='Arial', transform=ax.transAxes)
-ax.text(0.4, 0.05, f'Obs = 3.38 ± 2.80', fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.12, f'Sim = 1.77 ± 1.84 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
+ax.text(0.4, 0.05, f'Obs = 3.19 ± 2.49 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
 ax.text(0.9, 0.05, f'2019', fontsize=16, fontname='Arial', transform=ax.transAxes)
 # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
 # Create an inset axes for the color bar at the left middle of the plot
-colorbar_axes = inset_axes(ax,
-                           width="2%",
-                           height="60%",
+cbar_axes = inset_axes(ax,
+                           width='2%',
+                           height='50%',
                            bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
                            bbox_transform=ax.transAxes,
                            borderpad=0,
                            )
-cbar = plt.colorbar(im, cax=colorbar_axes, orientation="vertical")
-num_ticks = 5
-cbar.locator = plt.MaxNLocator(num_ticks)
-cbar.update_ticks()
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
 font_properties = font_manager.FontProperties(family='Arial', size=14)
-cbar.set_label(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
 cbar.ax.tick_params(axis='y', labelsize=14)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
 
+################################################################################################
+# Other: Create scatter plot, all black
+################################################################################################
+# Read the file
+# compr_df = pd.read_csv(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}07_MonMean.csv'.format(cres, inventory, deposition, species, year)))
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+
+# Define the range of x-values for the two segments
+x_range_1 = [compr_df['obs'].min(), 2.4]
+x_range_2 = [2.4, compr_df['obs'].max()]
+x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(7, 6))
+# Create scatter plot
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=20, alpha=1, color='k', edgecolor='k', markers='o')
+scatterplot.set_xscale('log')
+scatterplot.set_yscale('log')
+# Set title, xlim, ylim, ticks, labels
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([0.005, 50]) # 11 for edgar
+plt.ylim([0.005, 50])
+# Set tick locations and labels manually
+plt.xticks([0.01, 0.1, 1, 10], ['0.01', '0.1', '1', '10'], fontname='Arial', size=18)
+plt.yticks([0.01, 0.1, 1, 10], ['0.01', '0.1', '1', '10'], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with black dash
+plt.plot([compr_df['obs'].min(), compr_df['obs'].max()], [compr_df['obs'].min(), compr_df['obs'].max()], color='grey', linestyle='--', linewidth=1)
+
+# Perform linear regression for all segments
+mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['obs'][mask], compr_df['sim'][mask])
+# Plot regression lines
+# sns.regplot(x='obs', y='sim', data=compr_df[mask], scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.75, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
+
+# Set labels
+plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'FigS4_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean.svg'.format(cres, inventory, deposition, species), dpi=300)
+
+plt.show()
 ################################################################################################
 # SPARTAN HIPS vs UV-Vis vs IBR
 ################################################################################################
@@ -1421,13 +1483,6 @@ fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
 scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
 
-# Create the colorbar and specify font properties
-cbar = plt.colorbar(label='Number of Pairs')
-cbar.ax.yaxis.set_tick_params(labelsize=14)
-cbar.ax.set_ylabel('Number of Pairs', fontsize=16, fontname='Arial')
-cbar.outline.set_edgecolor('black')
-cbar.outline.set_linewidth(1)
-cbar.set_ticks([0, 5, 10, 15, 20])
 # Display the original data points as a scatter plot
 # plt.scatter(merged_df['HIPS'], merged_df['IBR'], color='black', s=10, alpha=0.5)
 
@@ -1467,29 +1522,35 @@ else:
 
 plt.xlabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('UV-Vis Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Create the colorbar and specify font properties
+cbar_ax = fig.add_axes([0.68, 0.25, 0.02, 0.4])
+cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
+cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
+cbar.set_ticks([0, 5, 10, 15, 20], fontname='Arial', fontsize=14)
+
 # show the plot
 plt.tight_layout()
-# plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_UV-Vis.tiff"), format="TIFF", dpi=300)
+# plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_UV-Vis.svg"), format="SVG", dpi=300)
 plt.show()
-
 
 ################################################################################################
 # calculate IBR BC
 ################################################################################################
-
 # Constants
-q = 0.6666667
+q = 1.5 # thickness
 filter_surface_area = 3.142  # cm^2
-absorption_cross_section = 0.060  # cm^2/ug
+absorption_cross_section = 0.060  # cm^2/ug, 0.1 in SOP, 0.075 for AEAZ
 
 # Define a function to calculate EBC (ug)
 def calculate_ebc(row):
     normalized_r = row['normalized_r']
     if normalized_r > 0:  # Check if normalized_r is positive
-        return q * filter_surface_area / absorption_cross_section * np.log(1 / normalized_r)
+        return  -filter_surface_area / (q * absorption_cross_section) * np.log(normalized_r / 1)
     else:
         return np.nan  # Replace invalid values with NaN
-
 
 # Initialize an empty DataFrame to store the combined data
 IBR_df = pd.DataFrame()
@@ -1522,21 +1583,27 @@ for subfolder in os.listdir(IBR_dir):
                 # Concatenate data with the combined DataFrame
                 IBR_df = pd.concat([IBR_df, df])
 
+# Write the merged data to separate sheets in an Excel file
+with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'),  engine='openpyxl', mode='w') as writer:
+    # Write the merged data
+    IBR_df.to_excel(writer, sheet_name='raw', index=False)
+
+# # the normalized reflectance is wrong for most cartridges
 # Normalize 'Reflectance' for each 'Cartridge ID'
-IBR_df = IBR_df.copy()
-for cart_id, group in IBR_df.groupby('Cartridge ID'):
+# IBR_df = IBR_df.copy()
+# IBR_df = pd.read_excel(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'))
+# for cart_id, group in IBR_df.groupby('Cartridge ID'):
+    # print(cart_id)
     # Find the 'Reflectance' value for 'Sample ID#' ending with '-7'
-    ref_7 = group.loc[group['Sample ID#'].str.endswith('-7'), 'Reflectance'].iloc[0]
+    # ref_7 = group.loc[group['Sample ID#'].str.endswith('-7'), 'Reflectance'].iloc[0]
     # Calculate normalized 'Reflectance' values for other 'Sample ID#'s
-    group['normalized_r'] = group['Reflectance'] / ref_7
+    # group['normalized_r'] = group['Reflectance'] / ref_7
     # Calculate EBC (ug) for each row
-    group['EBC_ug'] = group.apply(calculate_ebc, axis=1)
-
+    # group['EBC_ug'] = group.apply(calculate_ebc, axis=1)
     # Update the DataFrame with the calculated EBC values
-    IBR_df.loc[group.index, 'normalized_r'] = group['normalized_r']
-    IBR_df.loc[group.index, 'EBC_ug'] = group['EBC_ug']
-    IBR_df.loc[group.index, 'FilterID'] = group['Sample ID#'].str[:-2]
-
+    # IBR_df.loc[group.index, 'normalized_r'] = group['normalized_r']
+    # IBR_df.loc[group.index, 'EBC_ug'] = group['EBC_ug']
 # Write the combined data with normalized 'Reflectance' to a new Excel file
-IBR_df.to_excel(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), index=False)
-
+# with pd.ExcelWriter(os.path.join(out_dir, 'BC_IBR_SPARTAN.xlsx'), engine='openpyxl', mode='a') as writer:
+    # Write the merged data
+    # IBR_df.to_excel(writer, sheet_name='IBR_EBC_py', index=False)
