@@ -22,130 +22,92 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 
-cres = 'C360'
-year = 2019
-species = 'BC'
-inventory = 'CEDS'
-deposition = 'noLUO'
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
-# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
-obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
-site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
+Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
 ################################################################################################
-# Other: Map SPARTAN and GCHP data for the entire year
+# Match FTIR_OM and Residual
 ################################################################################################
-# Map SPARTAN and GCHP data for the entire year
-plt.style.use('default')
-plt.figure(figsize=(12, 5))
-left = 0.03  # Adjust the left position
-bottom = 0.01  # Adjust the bottom position
-width = 0.94  # Adjust the width
-height = 0.9  # Adjust the height
-ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
-ax.coastlines(color=(0.4, 0.4, 0.4))
-ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
-ax.set_global()
-ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+# Read the file
+merged_df = pd.read_excel(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), sheet_name='OM_Residual_20_22new_23')
+merged_df = merged_df.loc[merged_df['Residual'] < 50]
+# merged_df['Ratio'] =merged_df['OM'] / merged_df['FTIR_OC']
+# merged_df['OM'] = merged_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
 
-# Define the colormap
+# Create a 2D histogram to divide the area into squares and count data points in each square
+hist, xedges, yedges = np.histogram2d(merged_df['OM'], merged_df['Residual'], bins=60)
+
+# Determine the color for each square based on the number of pairs
+colors = np.zeros_like(hist)
+for i in range(len(hist)):
+    for j in range(len(hist[i])):
+        pairs = hist[i][j]
+        colors[i][j] = pairs
+
 # Define the custom color scheme gradient
-colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
+colors = [(1, 1, 1),(0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
 # Create a custom colormap using the gradient defined
 cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
-vmax = 4  # 8 for BC, 150 for PM25, 15 for SO4, 0.25 for BC_PM25, 2 for BC_SO4
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
 
-# Accumulate data for each face over the year
-annual_v = None
+# Plot the 2D histogram with the specified color scheme
+sns.set(font='Arial')
+scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
 
-for face in range(6):
-    for mon in range(1, 13):
-        sim_df = xr.open_dataset(
-            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
-            engine='netcdf4') # CEDS
-        x = sim_df.corner_lons.isel(nf=face)
-        y = sim_df.corner_lats.isel(nf=face)
-        v = sim_df[species].isel(nf=face)
-        if annual_v is None:
-            annual_v = v
-        else:
-            annual_v = annual_v + v
+# Display the original data points as a scatter plot
+# plt.scatter(merged_df['OM'], merged_df['Residual'], color='black', s=10, alpha=0.5)
 
-    # Calculate the annual average
-    annual_v /= 12
-    annual_v = annual_v.squeeze()
-    print(x.shape, y.shape, annual_v.shape)
+# Set title, xlim, ylim, ticks, labels
+plt.title('Batch 1, 2 and 3: FT-IR OM vs Residual', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([-5, 48])
+plt.ylim([-5, 48])
+plt.xticks([0, 10, 20, 30, 40], fontname='Arial', size=18)
+plt.yticks([0, 10, 20, 30, 40], fontname='Arial', size=18)
+ax.tick_params(axis='x', direction='out', width=1, length=5)
+ax.tick_params(axis='y', direction='out', width=1, length=5)
 
-    # Plot the annual average data for each face
-    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+# Add 1:1 line with black dash
+plt.plot([merged_df['Residual'].min(), merged_df['Residual'].max()], [merged_df['Residual'].min(), merged_df['Residual'].max()], color='grey', linestyle='--', linewidth=1)
 
-# Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
-                          sheet_name='Annual')
-compar_notna = compar_df[compar_df.notna().all(axis=1)]
-lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
-print(compar_notna['source'].unique())
+# Add number of data points to the plot
+num_points = len(merged_df)
+plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
 
-# Define marker sizes
-s1 = [40] * len(obs)  # inner circle: Observation
-s2 = [120] * len(obs)  # outer ring: Simulation
-markers = {'SPARTAN': 'o', 'other': 's'}
+# Perform linear regression with NaN handling
+mask = ~np.isnan(merged_df['OM']) & ~np.isnan(merged_df['Residual'])
+slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['OM'][mask], merged_df['Residual'][mask])
+# Check for NaN in results
+if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
+    print("Linear regression results contain NaN values. Check the input data.")
+else:
+    # Add linear regression line and text
+    sns.regplot(x='OM', y='Residual', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
+    # Change the sign of the intercept for display
+    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
+    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
 
-# Create scatter plot for other data points (squares)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source != 'SPARTAN':  # Exclude SPARTAN data for now
-        marker = markers.get(source, 'o')
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+    # Update the text line with the adjusted intercept
+    plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+             transform=plt.gca().transAxes, fontsize=18)
 
-# Create scatter plot for SPARTAN data points (circles)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source == 'SPARTAN':  # Plot SPARTAN data
-        marker = markers.get(source, 'o')
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+plt.xlabel('FT-IR Orgainc Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
-# Calculate the global mean of simulated and observed data
-global_mean_sim = np.nanmean(sim)
-global_mean_obs = np.nanmean(obs)
-global_std_sim = np.nanstd(sim)
-global_std_obs = np.nanstd(obs)
-
-# Display statistics as text annotations on the plot
-month_str = calendar.month_name[mon]
-ax.text(0.4, 0.12, f'Sim = 1.77 ± 1.84 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
-ax.text(0.4, 0.05, f'Obs = 3.19 ± 2.49 µg/m$^3$', fontsize=16, fontname='Arial', transform=ax.transAxes)
-ax.text(0.9, 0.05, f'2019', fontsize=16, fontname='Arial', transform=ax.transAxes)
-# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
-
-# Create an inset axes for the color bar at the left middle of the plot
-cbar_axes = inset_axes(ax,
-                           width='2%',
-                           height='50%',
-                           bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
-                           bbox_transform=ax.transAxes,
-                           borderpad=0,
-                           )
-cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
-font_properties = font_manager.FontProperties(family='Arial', size=14)
-cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
-cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-cbar.ax.tick_params(axis='y', labelsize=14)
+# Create the colorbar and specify font properties
+cbar_ax = fig.add_axes([0.72, 0.58, 0.02, 0.3])
+# cbar_ax = fig.add_axes([0.72, 0.20, 0.02, 0.3])
+cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
+cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
-
-plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_AnnualMean.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+cbar.set_ticks([0, 10, 20, 30, 40, 50], fontname='Arial', fontsize=14)
+ax.set_aspect(0.9 / 1)
+# show the plot
+plt.tight_layout()
+plt.savefig(out_dir + 'OM_vs_Residual_pairs_20_22new_23.svg', dpi=300)
 plt.show()

@@ -1435,7 +1435,6 @@ with pd.ExcelWriter(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'), engine
 ################################################################################################
 # plot HIPS vs UV-Vis, color cell by no. of pairs
 ################################################################################################
-
 # Read the file
 merged_df = pd.read_excel(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'))
 # Drop rows where f_BC is greater than 1
