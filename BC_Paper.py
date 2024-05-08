@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import calendar
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs  # cartopy must be >=0.19
 import xarray as xr
