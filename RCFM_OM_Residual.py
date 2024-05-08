@@ -25,10 +25,11 @@ import matplotlib.colors as mcolors
 # Set the directory path
 FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
 Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
+OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
 ################################################################################################
-# Match FTIR_OM and Residual
+# Match FTIR_OM, FTIR_OC, and Residual
 ################################################################################################
 # Function to read and preprocess data from master files
 def read_master_files(Residual_dir):
@@ -36,9 +37,9 @@ def read_master_files(Residual_dir):
     for filename in os.listdir(Residual_dir):
         if filename.endswith('.csv'):
             try:
-                master_data = pd.read_csv(os.path.join(Residual_dir, filename), skiprows=3, encoding='ISO-8859-1')
-                # print(f"First few rows of file '{filename}':")
-                # print(master_data.head())
+                master_data = pd.read_csv(os.path.join(Residual_dir, filename), skiprows=3, encoding='ISO-8859-1',
+                                          usecols=['Site_Code', 'Latitude', 'Longitude', 'Start_Year_local','Start_Month_local',
+                                                   'Start_Day_local', 'Parameter_Name', 'Value', 'Flag'])
                 # Select Residual
                 Residual_df = master_data.loc[master_data['Parameter_Name'] == 'Residual Matter'].copy()
                 Residual_df.rename(columns={'Site_Code': 'Site'}, inplace=True)
@@ -56,21 +57,20 @@ if __name__ == '__main__':
     Residual_df = read_master_files(Residual_dir)
     site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Site_Code', 'Country', 'City'])
     Residual_df = pd.merge(Residual_df, site_df, how="left", left_on="Site", right_on="Site_Code").drop("Site_Code", axis=1)
-    OM_22_new_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2022_06_new', usecols=['Site', 'Date', 'OM', 'FTIR_OC'])
     OM_23_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2023_03', usecols=['Site', 'Date', 'OM', 'FTIR_OC'])
-    OM_20_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2020_09',usecols=['Site', 'Date', 'OM', 'OC'])
-    OM_20_df.rename(columns={'OC': 'FTIR_OC'}, inplace=True)
+    OM_22_new_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2022_06_new', usecols=['Site', 'Date', 'OM', 'FTIR_OC'])
+    OM_20_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2020_09', usecols=['Site', 'Date', 'OM', 'OC'])
+    OM_23_df.rename(columns={'FTIR_OC': 'OC'}, inplace=True)
+    OM_22_new_df.rename(columns={'FTIR_OC': 'OC'}, inplace=True)
     OM_df = pd.concat([OM_20_df, OM_22_new_df, OM_23_df])
-    # print(OM_df.head())
-    # print(Residual_df.head())
     # Merge Residual and OM df based on matching values of "Site" and "Date"
     merged_df = pd.merge(Residual_df, OM_df, on=['Site', 'Date'], how='inner')
     merged_df.rename(columns={'Value': 'Residual'}, inplace=True)
-    merged_df.rename(columns={'Country': 'country'}, inplace=True)
-    merged_df.rename(columns={'City': 'city'}, inplace=True)
+    # merged_df.rename(columns={'Country': 'country'}, inplace=True)
+    # merged_df.rename(columns={'City': 'city'}, inplace=True)
     # Write to Excel
-    with pd.ExcelWriter(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), engine='openpyxl', mode='a') as writer:
-        Residual_df.to_excel(writer, sheet_name='Residual_all', index=False)
+    with pd.ExcelWriter(os.path.join(out_dir, 'OM_OC_Residual_SPARTAN.xlsx'), engine='openpyxl', mode='a') as writer:
+        merged_df.to_excel(writer, sheet_name='OM_OC_Residual_20_22new_23', index=False)
     with pd.ExcelWriter(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), engine='openpyxl', mode='a') as writer:
         merged_df.to_excel(writer, sheet_name='OM_Residual_20_22new_23', index=False)
 

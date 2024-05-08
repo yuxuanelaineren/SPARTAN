@@ -20,55 +20,154 @@ import seaborn as sns
 from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
-
+import matplotlib.colors as mcolors
 
 # Set the directory path
 FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
 Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
+OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
 ################################################################################################
-# Match FTIR_OM and Residual
+# Combine FTIR OC and GCHP OM/OC based on lat/lon and seasons
 ################################################################################################
-# Function to read and preprocess data from master files
-def read_master_files(Residual_dir):
-    Residual_dfs = []
-    for filename in os.listdir(Residual_dir):
-        if filename.endswith('.csv'):
-            try:
-                master_data = pd.read_csv(os.path.join(Residual_dir, filename), skiprows=3, encoding='ISO-8859-1')
-                # print(f"First few rows of file '{filename}':")
-                # print(master_data.head())
-                # Select Residual
-                Residual_df = master_data.loc[master_data['Parameter_Name'] == 'Residual Matter'].copy()
-                Residual_df.rename(columns={'Site_Code': 'Site'}, inplace=True)
-                # Combine date
-                Residual_df['Date'] = pd.to_datetime(Residual_df['Start_Year_local'].astype(str) + '-' + Residual_df['Start_Month_local'].astype(str) + '-' + Residual_df['Start_Day_local'].astype(str))
-                # Append the current HIPS_df to the list
-                Residual_dfs.append(Residual_df)
-            except Exception as e:
-                print(f"Error occurred while processing file '{filename}': {e}. Skipping to the next file.")
-    return pd.concat(Residual_dfs, ignore_index=True)
+# Function to find matching rows and add 'Country' and 'City'
+def find_and_add_location(lat, lon):
+    for index, row in site_df.iterrows():
+        if abs(row['Latitude'] - lat) <= 0.3 and abs(row['Longitude'] - lon) <= 0.3:
+            return row['Country'], row['City']
+    return None, None
 
-# Main script
-if __name__ == '__main__':
-    # Read data
-    Residual_df = read_master_files(Residual_dir)
-    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Site_Code', 'Country', 'City'])
-    Residual_df = pd.merge(Residual_df, site_df, how="left", left_on="Site", right_on="Site_Code").drop("Site_Code", axis=1)
-    OM_22_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2022_06', usecols=['Site', 'Date', 'M_Total', 'OC'])
-    OM_22_df.rename(columns={'M_Total': 'OM_new'}, inplace=True)
-    OM_22_df.rename(columns={'OC': 'FTIR_OC_new'}, inplace=True)
-    OM_22_new_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2022_06_new',
-                                 usecols=['Site', 'Date', 'OM', 'FTIR_OC'])
-    # print(OM_df.head())
-    # print(Residual_df.head())
-    # Merge Residual and OM df based on matching values of "Site" and "Date"
-    merged_df = pd.merge(OM_22_new_df, OM_22_df, on=['Site', 'Date'], how='inner')
-    merged_df.rename(columns={'Country': 'country'}, inplace=True)
-    merged_df.rename(columns={'City': 'city'}, inplace=True)
-    # Write to Excel
-    with pd.ExcelWriter(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), engine='openpyxl', mode='a') as writer:
-        merged_df.to_excel(writer, sheet_name='OM_Residual_22_22new', index=False)
+# Create empty lists to store data for each month
+monthly_data = []
 
+# Loop through each season
+for mon in range(1, 13):
+    sim_df = xr.open_dataset(OMOC_dir + 'OMOC.JJA.01x01.nc', engine='netcdf4')
+    obs_df = pd.read_excel(out_dir + 'OM_OC_Residual_SPARTAN.xlsx', sheet_name='OM_OC_Residual_20_22new_23')
 
+    # Filter obs_df based on 'start_month'
+    obs_df = obs_df[obs_df['start_month'] == mon]
+
+    # Extract nf, Ydim, Xdim, lon/lat, buffer, and BC from simulation data
+    nf = np.array(sim_df.nf)
+    Ydim = np.array(sim_df.Ydim)
+    Xdim = np.array(sim_df.Xdim)
+    sim_lon = np.array(sim_df.lons).astype('float32')
+    sim_lon[sim_lon > 180] -= 360
+    sim_lat = np.array(sim_df.lats).astype('float32')
+    sim_conc = np.array(sim_df['OMOC'])
+    buffer = 10
+
+    # Drop NaN and infinite values from obs_conc
+    obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
+    obs_df = obs_df.dropna(subset=['OMOC'], thresh=1)
+
+    # Extract lon/lat from observation data
+    obs_lon = obs_df['Longitude']
+    obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
+    obs_lat = obs_df['Latitude']
+    obs_conc = obs_df['OMOC']
+    obs_year = obs_df['start_year']
+
+    # Find the nearest simulation lat/lon neighbors for each observation
+    match_obs_lon = np.zeros(len(obs_lon))
+    match_obs_lat = np.zeros(len(obs_lon))
+    match_obs = np.zeros(len(obs_lon))
+    match_sim_lon = np.zeros(len(obs_lon))
+    match_sim_lat = np.zeros(len(obs_lon))
+    match_sim = np.zeros(len(obs_lon))
+
+    # Calculate distance between the observation and all simulation points using cdist
+    for k in range(len(obs_lon)):
+        # Spherical law of cosines:
+        R = 6371  # Earth radius 6371 km
+        latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
+        lonk = obs_lon.iloc[k]  # Use .iloc to access value by integer location
+        # Select simulation points within a buffer around the observation's lat/lon
+        ind = np.where((sim_lon > lonk - buffer) & (sim_lon < lonk + buffer)
+                       & (sim_lat > latk - buffer) & (sim_lat < latk + buffer))
+        # Extract relevant simulation data
+        sim_lonk = sim_lon[ind]
+        sim_latk = sim_lat[ind]
+        sim_conck = sim_conc[ind]
+        # Calculate distance between the observation and selected simulation points
+        dd = np.arccos(np.sin(latk * np.pi / 180) * np.sin(sim_latk * np.pi / 180) + \
+                       np.cos(latk * np.pi / 180) * np.cos(sim_latk * np.pi / 180) * np.cos(
+            (sim_lonk - lonk) * np.pi / 180)) * R
+        ddmin = np.nanmin(dd)
+        ii = np.where(dd == ddmin)
+        # Use iloc to access the element by integer position
+        match_obs[k] = obs_conc.iloc[k]
+        match_sim[k] = np.nanmean(sim_conck[ii])
+        match_sim_lat[k] = np.nanmean(sim_latk[ii])
+        match_sim_lon[k] = np.nanmean(sim_lonk[ii])
+
+    # Get unique lat/lon and average observation data at the same simulation box
+    coords = np.concatenate((match_sim_lat[:, None], match_sim_lon[:, None]), axis=1)
+    coords_u, ind, ct = np.unique(coords, return_index=True, return_counts=True, axis=0)
+    match_lon_u = match_sim_lon[ind]
+    match_lat_u = match_sim_lat[ind]
+    match_sim_u = match_sim[ind]
+    # Calculate the monthly average observation data for each unique simulation box
+    match_obs_u = np.zeros(len(ct))
+    for i in range(len(ct)):
+        irow = np.where((coords == coords_u[i]).all(axis=1))
+        match_obs_u[i] = np.nanmean(match_obs[irow])
+
+    # Drop rows with NaN values from the final data
+    nanindex = np.argwhere(
+        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_obs_u))).squeeze()
+    match_lon_u = np.delete(match_lon_u, nanindex)
+    match_lat_u = np.delete(match_lat_u, nanindex)
+    match_sim_u = np.delete(match_sim_u, nanindex)
+    match_obs_u = np.delete(match_obs_u, nanindex)
+
+    # Create DataFrame for current month
+    columns = ['lat', 'lon', 'OMOC', 'OC','num_obs']
+    compr_data = np.concatenate(
+        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], ct[:, None]), axis=1)
+    compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
+    # Add a 'month' column to the DataFrame
+    compr_df['month'] = mon
+    compr_df['year'] = obs_year
+
+    # Apply the function to 'compr_df' and create new columns
+    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
+                                                   result_type='expand')
+    # Display the updated 'compr_df'
+    print(compr_df)
+
+    # Save monthly CSV file
+    # outfile = os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon))
+    # compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
+
+    # Append data to the monthly_data list
+    monthly_data.append(compr_df)
+
+    # Calculate mean, sd, and max for simulated and observed concentrations
+    mean_sim = np.nanmean(match_sim_u)
+    sd_sim = np.nanstd(match_sim_u)
+    max_sim = np.nanmax(match_sim_u)
+    mean_obs = np.nanmean(match_obs_u)
+    sd_obs = np.nanstd(match_obs_u)
+    max_obs = np.nanmax(match_obs_u)
+    # Print the results
+    print(f'Simulated_{species}_in_{mon} Mean: {mean_sim:.2f}, SD: {sd_sim:.2f}, Max: {max_sim:.2f}')
+    print(f'Observed_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
+
+# Combine monthly data to create the annual DataFrame
+annual_df = pd.concat(monthly_data, ignore_index=True)
+annual_df['month'] = annual_df['month'].astype(int)
+# Calculate annual average for each site
+annual_average_df = annual_df.groupby(['country', 'city']).agg({
+    'sim': 'mean',
+    'obs': 'mean',
+    'num_obs': 'sum',
+    'lat': 'mean',
+    'lon': 'mean' }).reset_index()
+with pd.ExcelWriter(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
+    annual_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
+
+sim_df.close()
