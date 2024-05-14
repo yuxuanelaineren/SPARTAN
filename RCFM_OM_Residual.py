@@ -362,13 +362,78 @@ plt.tight_layout()
 plt.show()
 
 ################################################################################################
-# Combine FTIR OC and GCHP OM/OC based on lat/lon and seasons
+# Extract GCHP OM/OC at SPARTAN sites for 4 seasons
 ################################################################################################
-
 # Load data
-sim_df = xr.open_dataset(OMOC_dir + 'OMOC.DJF.01x01.nc', engine='netcdf4') # DJF, JJA, MAM, SON
-obs_df = pd.read_excel(out_dir + 'OM_OC_Residual_SPARTAN.xlsx', sheet_name='OM_OC_Residual_20_22new_23')
 site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Country', 'City', 'Latitude', 'Longitude'])
+
+# Create an empty DataFrame to store all seasons
+all_seasons_df = pd.DataFrame()
+# Loop through each season file
+for season_file in ['OMOC.DJF.01x01.nc', 'OMOC.JJA.01x01.nc', 'OMOC.MAM.01x01.nc', 'OMOC.SON.01x01.nc']:
+    # Load data
+    sim_df = xr.open_dataset(OMOC_dir + season_file, engine='netcdf4')
+
+    # Add a new column 'season' based on the current file being processed
+    season = season_file.split('.')[1]
+    sim_df['season'] = season
+
+    # Extract lon/lat from SPARTAN site
+    site_lon = site_df['Longitude']
+    site_df.loc[site_df['Longitude'] > 180, 'Longitude'] -= 360
+    site_lat = site_df['Latitude']
+
+    # Extract lon/lat, and OMOC from sim
+    sim_lon = np.array(sim_df.coords['lon'])
+    sim_lon[sim_lon > 180] -= 360
+    sim_lat = np.array(sim_df.coords['lat'])
+    sim_conc = np.array(sim_df['OMOC'])
+
+    # Initialize lists to store data
+    sim_data = []
+    site_data = []
+
+    # Iterate over each site
+    for site_index, (site_lon, site_lat) in enumerate(zip(site_lon, site_lat)):
+        # Find the nearest simulation latitude and longitude to the site
+        sim_lat_nearest = sim_df.lat.sel(lat=site_lat, method='nearest').values
+        sim_lon_nearest = sim_df.lon.sel(lon=site_lon, method='nearest').values
+
+        # Extract the corresponding simulation concentration
+        sim_conc_nearest = sim_df.sel(lat=sim_lat_nearest, lon=sim_lon_nearest)['OMOC'].values[0]
+
+        # Append the data to the lists
+        sim_data.append((sim_lat_nearest, sim_lon_nearest, sim_conc_nearest))
+        site_data.append((site_lat, site_lon))
+
+        print(site_index)
+
+    # Create DataFrame with sim and site data
+    sim_site_df = pd.DataFrame(sim_data, columns=['sim_lat', 'sim_lon', 'sim_OMOC'])
+    sim_site_df['site_lat'] = [data[0] for data in site_data]
+    sim_site_df['site_lon'] = [data[1] for data in site_data]
+
+    # Merge site_df with sim_site_df based on latitude and longitude
+    sim_site_df = pd.merge(sim_site_df, site_df[['Latitude', 'Longitude', 'Country', 'City']],
+                           left_on=['site_lat', 'site_lon'], right_on=['Latitude', 'Longitude'], how='left')
+    # Add a 'season' column
+    sim_site_df['season'] = season
+    # Drop the redundant latitude and longitude columns from site_df
+    sim_site_df.drop(columns=['Latitude', 'Longitude'], inplace=True)
+
+    # Concatenate the current season's DataFrame with all_seasons_df
+    all_seasons_df = pd.concat([all_seasons_df, sim_site_df], ignore_index=True)
+
+# Print the resulting DataFrame
+print(all_seasons_df)
+
+# Write the summary DataFrame to an Excel file
+with pd.ExcelWriter(out_dir + 'sim_OMOC_at_SPARTAN_site.xlsx', engine='openpyxl', mode='w') as writer:
+    all_seasons_df.to_excel(writer, sheet_name='All_Seasons', index=False)
+
+################################################################################################
+# Combine FTIR OC and extracted GCHP OM/OC based on lat/lon and seasons
+################################################################################################
 
 # Define a function to map months to seasons
 def get_season(month):
@@ -383,51 +448,211 @@ def get_season(month):
     else:
         return 'Unknown'
 
+# Load data
+obs_df = pd.read_excel(out_dir + 'FTIR_OM_vs_SPARTAN_Residual.xlsx', sheet_name='OM_OC_Residual_20_22new_23',
+                       usecols=['Site', 'Country', 'City', 'Start_Month_local', 'Residual', 'Date', 'OM', 'OC'])
+sim_df = pd.read_excel(out_dir + 'sim_OMOC_at_SPARTAN_site.xlsx', sheet_name='All_Seasons')
+
 # Add a new column 'season' based on 'Start_Month_local'
 obs_df.rename(columns={'Start_Month_local': 'month'}, inplace=True)
 obs_df['season'] = obs_df['month'].apply(get_season)
+obs_df.rename(columns={'OM': 'FTIR_OM', 'OC': 'FTIR_OC'}, inplace=True)
 
-# Extract lon/lat from SPARTAN site
-site_lon = site_df['Longitude']
-site_df.loc[site_df['Longitude'] > 180, 'Longitude'] -= 360
-site_lat = site_df['Latitude']
 
-# Extract lon/lat, and OMOC from sim
-sim_lon = np.array(sim_df.coords['lon']) # Length of sim_lon: 3600
-sim_lon[sim_lon > 180] -= 360
-sim_lat = np.array(sim_df.coords['lat']) # Length of sim_lat: 1800
-sim_conc = np.array(sim_df['OMOC'])
+# Merge obs_df and sim_df based on 'season', 'Latitude', and 'Longitude' in obs_df, and 'season', 'site_lat', and 'site_lon' in sim_df
+sim_obs_df = pd.merge(obs_df, sim_df, left_on=['season', 'Country', 'City'], right_on=['season', 'Country', 'City'], how='inner')
 
-# Initialize lists to store data
-sim_data = []
-site_data = []
-
-# Iterate over each site
-for site_index, (site_lon, site_lat) in enumerate(zip(site_lon, site_lat)):
-    # Find the nearest simulation latitude and longitude to the site
-    sim_lat_nearest = sim_df.lat.sel(lat=site_lat, method='nearest').values
-    sim_lon_nearest = sim_df.lon.sel(lon=site_lon, method='nearest').values
-
-    # Extract the corresponding simulation concentration
-    sim_conc_nearest = sim_df.sel(lat=sim_lat_nearest, lon=sim_lon_nearest)['OMOC'].values
-
-    # Append the data to the lists
-    sim_data.append((sim_lat_nearest, sim_lon_nearest, sim_conc_nearest))
-    site_data.append((site_lat, site_lon))
-
-# Create DataFrame with simulation and site data
-sim_site_df = pd.DataFrame(sim_data, columns=['sim_lat', 'sim_lon', 'sim_OMOC'])
-sim_site_df['site_lat'] = [data[0] for data in site_data]
-sim_site_df['site_lon'] = [data[1] for data in site_data]
-
-# Merge site_df with sim_site_df based on latitude and longitude
-sim_site_df = pd.merge(sim_site_df, site_df[['Latitude', 'Longitude', 'Country', 'City']],
-                       left_on=['site_lat', 'site_lon'], right_on=['Latitude', 'Longitude'], how='left')
 # Drop the redundant latitude and longitude columns from site_df
-sim_site_df.drop(columns=['Latitude', 'Longitude'], inplace=True)
+# sim_obs_df.drop(columns=['sim_lat', 'sim_lon'], inplace=True)
 
-# Print the resulting DataFrame
-print(sim_site_df)
+print('sim_obs_df:', sim_obs_df)
 
-with pd.ExcelWriter(out_dir + 'OMOC_SPARTAN_Summary.xlsx', engine='openpyxl') as writer:
-    sim_site_df.to_excel(writer, sheet_name='DJF', index=False)
+# Write the summary DataFrame to an Excel file
+with pd.ExcelWriter(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', engine='openpyxl', mode='w') as writer:
+    sim_obs_df.to_excel(writer, sheet_name='all', index=False)
+
+
+################################################################################################
+# Create scatter plot for Residual vs FTIR OM vs GCHP OM/OC, colored by region, in seperate regions
+################################################################################################
+def get_city_index(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return cities.index(city)
+    return float('inf')  # If city is not found, place it at the end
+def get_region_for_city(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return region
+    print(f"Region not found for city: {city}")
+    return None
+def map_city_to_color(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_color = region_colors[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
+            return assigned_color
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_marker = region_markers[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
+            return assigned_marker
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city)
+            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
+            return assigned_marker
+    return None
+# Read the file
+compr_df = pd.read_excel(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', sheet_name='all')
+compr_df.rename(columns={'City': 'city'}, inplace=True)
+compr_df['sim_OM'] = compr_df['sim_OMOC'] * compr_df['FTIR_OC']
+compr_df = compr_df.loc[compr_df['Residual'] < 50]
+# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
+
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+
+# Classify 'city' based on 'region'
+region_mapping = {
+    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
+    'Australia': ['Melbourne'],
+    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
+    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
+    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
+    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
+    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
+}
+region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
+
+# Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
+region_colors = {
+    'North America': [
+        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
+    ],  # Blue shades
+    'Central Asia': [
+        (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
+    ],  # Purple shades
+    'Australia': [
+        (0.6, 0.4, 0.2)
+    ],  # Brown
+    'East Asia': [
+        (0, 0.5, 0), (0, 0.8, 0), (0, 1, 0), (0.56, 0.93, 0.56), (0.8, 0.9, 0.8)
+    ],  # Green shades
+    'South Asia': [
+        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.4, 0.4), (0.9, 0.6, 0.6)
+    ],  # Red shades
+    'Africa': [
+        (1, 0.4, 0), (1, 0.6, 0.14), (1, 0.63, 0.48), (1, 0.85, 0.73), (1, 0.96, 0.85)
+    ], # Orange shades
+    'South America': [
+        (1, 0.16, 0.827), (1, 0.42, 0.70), (0.8, 0.52, 0.7), (0.961, 0.643, 0.804), (1, 0.64, 0.64), (1, 0.76, 0.48)
+    ]  # Pink shades
+}
+
+# Create an empty list to store the city_palette for each city
+city_palette = []
+city_color_match = []
+# Iterate over each unique city and map it to a gradient
+for city in unique_cities:
+    city_color = map_city_to_color(city)
+    if city_color is not None:
+        city_palette.append(city_color)
+        city_color_match.append({'city': city, 'color': city_color})  # Store both city name and color
+print("City Palette:", city_palette)
+
+# Define custom palette for each region with 5 shades for each color
+region_markers = {
+    'North America': ['o', '^', 's', 'p', 'H', '*'],
+    'Australia': ['o', '^', 's', 'p', 'H', '*'],
+    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Africa': ['o', '^', 's', 'p', 'H', '*'],
+    'South America': ['o', '^', 's', 'p', 'H', '*'],
+}
+
+# Create an empty list to store the city_marker for each city
+city_marker = []
+city_marker_match = []
+
+# Iterate over each unique city and map it to a marker
+for city in unique_cities:
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        city_marker.append(marker)
+        city_marker_match.append({'city': city, 'marker': marker})
+
+print("City Marker:", city_marker)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['sim_OM'].min(), compr_df['sim_OM'].max()]
+
+# Filter the DataFrame to include only data from Africa and South Asia
+filtered_df = compr_df[compr_df['city'].isin(region_mapping['Africa'])]
+
+# Assign colors and markers based on the mapping dictionaries
+city_color_mapping = {city_info['city']: city_info['color'] for city_info in city_color_match}
+city_marker_mapping = {city_info['city']: city_info['marker'] for city_info in city_marker_match}
+
+# Assign colors and markers based on the mapping dictionaries
+filtered_df['color'] = filtered_df['city'].map(city_color_mapping)
+filtered_df['marker'] = filtered_df['city'].map(city_marker_mapping)
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Plot filtered data
+for index, row in filtered_df.iterrows():
+    plt.scatter(row['sim_OM'], row['FTIR_OM'], color=row['color'], marker=row['marker'], edgecolor='k', s=40, label=row['city'])
+
+# Set title, xlim, ylim, ticks, labels
+plt.xlim([-5, 55])
+plt.ylim([-5, 55])
+plt.xticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+plt.yticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+ax.tick_params(axis='x', direction='out', width=1, length=5)
+ax.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with grey dash
+x = filtered_df['sim_OM']
+y = filtered_df['sim_OM']
+plt.plot([filtered_df['sim_OM'].min(), 50], [filtered_df['sim_OM'].min(), 50], color='grey', linestyle='--', linewidth=1)
+
+# Perform linear regression for all segments
+mask = (filtered_df['sim_OM'] >= x_range[0]) & (filtered_df['sim_OM'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(filtered_df['sim_OM'][mask], filtered_df['FTIR_OM'][mask])
+
+# Plot regression lines
+sns.regplot(x='sim_OM', y='FTIR_OM', data=filtered_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.1, 0.76, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+plt.text(0.70, 0.05, f'Africa', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+
+# Set labels
+plt.xlabel('FT-IR OC * GCHP OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('FTIR OM (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+ax.set_aspect(0.9 / 1)
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'GCHP_OMOC_FTIR_OC_vs_FTIR_OM_Africa.svg', dpi=300)
+plt.show()

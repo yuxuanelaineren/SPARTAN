@@ -26,101 +26,210 @@ Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
 OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
+
 ################################################################################################
-# Combine FTIR OC and GCHP OM/OC based on lat/lon and seasons
+# Create scatter plot for Residual vs FTIR OM vs GCHP OM/OC, colored by region
 ################################################################################################
+def get_city_index(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return cities.index(city)
+    return float('inf')  # If city is not found, place it at the end
+def get_region_for_city(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return region
+    print(f"Region not found for city: {city}")
+    return None
+def map_city_to_color(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_color = region_colors[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
+            return assigned_color
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city) % len(region_colors[region])
+            assigned_marker = region_markers[region][city_index]
+            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
+            return assigned_marker
+    print(f"City not found in any region: {city}")
+    return (0, 0, 0)
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city)
+            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
+            return assigned_marker
+    return None
+# Read the file
+compr_df = pd.read_excel(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', sheet_name='all')
+compr_df.rename(columns={'City': 'city'}, inplace=True)
+compr_df['sim_OM'] = compr_df['sim_OMOC'] * compr_df['FTIR_OC']
+compr_df = compr_df.loc[compr_df['Residual'] < 50]
+# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
 
-# Load data
-sim_df = xr.open_dataset(OMOC_dir + 'OMOC.DJF.01x01.nc', engine='netcdf4') # DJF, JJA, MAM, SON
-obs_df = pd.read_excel(out_dir + 'OM_OC_Residual_SPARTAN.xlsx', sheet_name='OM_OC_Residual_20_22new_23')
-site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Country', 'City', 'Latitude', 'Longitude'])
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
 
-# Define a function to map months to seasons
-def get_season(month):
-    if month in [12, 1, 2]:
-        return 'DJF'
-    elif month in [3, 4, 5]:
-        return 'JJA'
-    elif month in [6, 7, 8]:
-        return 'MAM'
-    elif month in [9, 10, 11]:
-        return 'SON'
-    else:
-        return 'Unknown'
+# Classify 'city' based on 'region'
+region_mapping = {
+    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
+    'Australia': ['Melbourne'],
+    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
+    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
+    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
+    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
+    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
+}
+region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
 
-# Add a new column 'season' based on 'Start_Month_local'
-obs_df.rename(columns={'Start_Month_local': 'month'}, inplace=True)
-obs_df['season'] = obs_df['month'].apply(get_season)
+# Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
+region_colors = {
+    'North America': [
+        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
+    ],  # Blue shades
+    'Central Asia': [
+        (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
+    ],  # Purple shades
+    'Australia': [
+        (0.6, 0.4, 0.2)
+    ],  # Brown
+    'East Asia': [
+        (0, 0.5, 0), (0, 0.8, 0), (0, 1, 0), (0.56, 0.93, 0.56), (0.8, 0.9, 0.8)
+    ],  # Green shades
+    'South Asia': [
+        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.4, 0.4), (0.9, 0.6, 0.6)
+    ],  # Red shades
+    'Africa': [
+        (1, 0.4, 0), (1, 0.6, 0.14), (1, 0.63, 0.48), (1, 0.85, 0.73), (1, 0.96, 0.85)
+    ], # Orange shades
+    'South America': [
+        (1, 0.16, 0.827), (1, 0.42, 0.70), (0.8, 0.52, 0.7), (0.961, 0.643, 0.804), (1, 0.64, 0.64), (1, 0.76, 0.48)
+    ]  # Pink shades
+}
 
-# Extract lon/lat from SPARTAN site
-site_lon = site_df['Longitude']
-site_df.loc[site_df['Longitude'] > 180, 'Longitude'] -= 360
-site_lat = site_df['Latitude']
-print("site_lon:", site_lon)
-print("site_lat:", site_lat)
-# Extract lon/lat, and OMOC from sim
-sim_lon = np.array(sim_df.coords['lon']) # Length of sim_lon: 3600
-sim_lon[sim_lon > 180] -= 360
-sim_lat = np.array(sim_df.coords['lat']) # Length of sim_lat: 1800
-sim_conc = np.array(sim_df['OMOC'])
-print("sim_lon:", sim_lon)
-print("sim_lat:", sim_lat)
-print("sim_conc:", sim_conc)
-# # Interpolate sim_lat
-# interp_func = interpolate.interp1d(np.arange(len(sim_lat)), sim_lat, kind='linear')
-# sim_lat = interp_func(np.linspace(0, len(sim_lat) - 1, len(sim_lon)))
-# # Interpolate sim_conc
-# sim_conc = np.empty((1, len(sim_lat), len(sim_lon)))
-# for i in range(len(sim_lon)):
-#     f = interpolate.interp1d(sim_lat, sim_conc[0, :, i], kind='linear')
-#     sim_conc[0, :, i] = f(sim_lat)
-# print("sim_lon:", sim_lon)
-# print("sim_lat:", sim_lat)
-# print("sim_conc:", sim_conc)
-print("Shape of sim_lon:", sim_lon.shape)
-print("Shape of sim_lat:", sim_lat.shape)
-print("Shape of sim_conc:", sim_conc.shape)
-# Initialize lists to store data
-sim_data = []
-site_data = []
+# Create an empty list to store the city_palette for each city
+city_palette = []
+city_color_match = []
+# Iterate over each unique city and map it to a gradient
+for city in unique_cities:
+    city_color = map_city_to_color(city)
+    if city_color is not None:
+        city_palette.append(city_color)
+        city_color_match.append({'city': city, 'color': city_color})  # Store both city name and color
+print("City Palette:", city_palette)
 
-# Iterate over each site
-for site_index, (site_lon, site_lat) in enumerate(zip(site_lon, site_lat)):
-    print('site_data:', (site_lat, site_lon))
-    # Calculate the distance between the site and all grid points in the simulation data
-    # distances = cdist([(site_lat, site_lon)], np.column_stack((sim_lat, sim_lon))) # need same shape in sim_lon and sim_lat
-    distances = cdist([(site_lat, site_lon)], list(zip(sim_lat.ravel(), sim_lon.ravel())))
-    print("distances:", distances)
-    print("Shape of distances:", distances.shape)
-    # Find the indices of the minimum distance
-    min_index = np.unravel_index(np.argmin(distances), distances.shape)
-    print("min_index:", min_index)
-    # Extract the nearest simulation latitude, longitude, and concentration
-    sim_lat_nearest = sim_lat[min_index[0]] # row index (latitude index)
-    sim_lon_nearest = sim_lon[min_index[1]] # column index (longitude index)
-    sim_conc_nearest = sim_conc[min_index[0], min_index[0], min_index[1]]
+# Define custom palette for each region with 5 shades for each color
+region_markers = {
+    'North America': ['o', '^', 's', 'p', 'H', '*'],
+    'Australia': ['o', '^', 's', 'p', 'H', '*'],
+    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Africa': ['o', '^', 's', 'p', 'H', '*'],
+    'South America': ['o', '^', 's', 'p', 'H', '*'],
+}
 
-    # Append the data to the lists
-    sim_data.append((sim_lat_nearest, sim_lon_nearest, sim_conc_nearest))
-    site_data.append((site_lat, site_lon))
-    print('site_data:', site_data)
+# Create an empty list to store the city_marker for each city
+city_marker = []
+city_marker_match = []
 
-# Create DataFrame with simulation and site data
-sim_site_df = pd.DataFrame(sim_data, columns=['sim_lat', 'sim_lon', 'sim_OMOC'])
-sim_site_df['site_lat'] = [data[0] for data in site_data]
-sim_site_df['site_lon'] = [data[1] for data in site_data]
+# Iterate over each unique city and map it to a marker
+for city in unique_cities:
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        city_marker.append(marker)
+        city_marker_match.append({'city': city, 'marker': marker})
 
+print("City Marker:", city_marker)
 
-# Merge site_df with sim_site_df based on latitude and longitude
-sim_site_df = pd.merge(sim_site_df, site_df[['Latitude', 'Longitude', 'Country', 'City']],
-                       left_on=['site_lat', 'site_lon'], right_on=['Latitude', 'Longitude'], how='left')
+# Filter the DataFrame to include only data from Africa and South Asia
+compr_df = compr_df[compr_df['city'].isin(region_mapping['Africa'])]
 
-# Drop the redundant latitude and longitude columns from site_df
-sim_site_df.drop(columns=['Latitude', 'Longitude'], inplace=True)
+# Define the range of x-values for the two segments
+x_range = [compr_df['sim_OM'].min(), compr_df['sim_OM'].max()]
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
 
-# Print the resulting DataFrame
-print(sim_site_df)
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='sim_OM', y='FTIR_OM', data=compr_df, hue='city', palette=city_palette, s=20, alpha=1, edgecolor='k', style='city',  markers=city_marker)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
 
+# Sort the unique_cities list based on their appearance in region_mapping
+unique_cities_sorted = sorted(unique_cities, key=get_city_index)
 
-with pd.ExcelWriter(out_dir + 'OMOC_SPARTAN_Summary.xlsx', engine='openpyxl') as writer:
-    sim_site_df.to_excel(writer, sheet_name='DJF', index=False)
+# Create legend with custom order
+sorted_city_color_match = sorted(city_color_match, key=lambda x: (
+    list(region_mapping.keys()).index(get_region_for_city(x['city'])),
+    region_mapping[get_region_for_city(x['city'])].index(x['city'])
+))
+
+# Create legend handles with both color and marker for each city
+legend_handles = []
+for city_info in sorted_city_color_match:
+    city = city_info['city']
+    color = city_info['color']
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        handle = plt.Line2D([0], [0], marker=marker, color=color, linestyle='', markersize=6, label=city)
+        legend_handles.append(handle)
+
+# Create legend with custom handles
+legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+# plt.title('Batch 2 and 3: FT-IR OM vs Residual', fontsize=18, fontname='Arial', y=1.03)
+# plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([-5, 55])
+plt.ylim([-5, 55])
+plt.xticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+plt.yticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with grey dash
+x = compr_df['sim_OM']
+y = compr_df['sim_OM']
+plt.plot([compr_df['sim_OM'].min(), 50], [compr_df['sim_OM'].min(), 50], color='grey', linestyle='--', linewidth=1)
+
+# Perform linear regression for all segments
+mask = (compr_df['sim_OM'] >= x_range[0]) & (compr_df['sim_OM'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['sim_OM'][mask], compr_df['FTIR_OM'][mask])
+# Plot regression lines
+sns.regplot(x='sim_OM', y='FTIR_OM', data=compr_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.1, 0.76, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.1, 0.7, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.66, 0.05, f'Batch 2 and 3', transform=scatterplot.transAxes, fontsize=18)
+
+# Set labels
+plt.xlabel('FT-IR OC * GCHP OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('FTIR OM (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'GCHP_OMOC_FTIR_OC_vs_FTIR_OM.svg', dpi=300)
+
+plt.show()
