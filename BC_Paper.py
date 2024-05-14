@@ -164,7 +164,7 @@ for mon in range(1, 13):
     match_sim_lat = np.zeros(len(obs_lon))
     match_sim = np.zeros(len(obs_lon))
 
-    # Calculate distance between the observation and all simulation points using cdist
+    # Calculate distance between the observation and all simulation points
     for k in range(len(obs_lon)):
         # Spherical law of cosines:
         R = 6371  # Earth radius 6371 km

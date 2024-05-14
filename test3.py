@@ -57,77 +57,69 @@ site_lon = site_df['Longitude']
 site_df.loc[site_df['Longitude'] > 180, 'Longitude'] -= 360
 site_lat = obs_df['Latitude']
 
-# Extract nf, Ydim, Xdim, lon/lat, and OMOC from sim
+# Extract lon/lat, and OMOC from sim
 sim_lon = np.array(sim_df.coords['lon']) # Length of sim_lon: 3600
 sim_lon[sim_lon > 180] -= 360
 sim_lat = np.array(sim_df.coords['lat']) # Length of sim_lat: 1800
 sim_conc = np.array(sim_df['OMOC'])
-# Interpolate sim_lat
+print("sim_lon:", sim_lon)
+print("sim_lat:", sim_lat)
+print("sim_conc:", sim_conc)
+# # Interpolate sim_lat
 # interp_func = interpolate.interp1d(np.arange(len(sim_lat)), sim_lat, kind='linear')
 # sim_lat = interp_func(np.linspace(0, len(sim_lat) - 1, len(sim_lon)))
-# Truncate sim_lon
-sim_lon = sim_lon[:len(sim_lat)]
-print("Shape of sim_conc:", sim_conc.shape)
-print("Shape of sim_lon:", sim_lon.shape)
-print("Shape of sim_lat:", sim_lat.shape)
+# # Interpolate sim_conc
+# sim_conc = np.empty((1, len(sim_lat), len(sim_lon)))
+# for i in range(len(sim_lon)):
+#     f = interpolate.interp1d(sim_lat, sim_conc[0, :, i], kind='linear')
+#     sim_conc[0, :, i] = f(sim_lat)
+# print("sim_lon:", sim_lon)
+# print("sim_lat:", sim_lat)
+# print("sim_conc:", sim_conc)
+# print("Shape of sim_lon:", sim_lon.shape)
+# print("Shape of sim_lat:", sim_lat.shape)
+# print("Shape of sim_conc:", sim_conc.shape)
+# Initialize lists to store data
+sim_data = []
+site_data = []
 
-# Define buffer in degree
-buffer = 10
+# Iterate over each site
+for site_index, (site_lon, site_lat) in enumerate(zip(site_lon, site_lat)):
+    # Calculate distances between the site and all simulation grid points
+    # distances = cdist([(site_lat, site_lon)], np.column_stack((sim_lat, sim_lon))) # need same shape in sim_lon and sim_lat
+    distances = cdist([(site_lat, site_lon)], list(zip(sim_lat.ravel(), sim_lon.ravel()))).reshape(sim_lat.shape)
+    print("distances:", distances)
+    # Find the min index
+    min_index = np.argmin(distances)
+    print("min_index:", min_index)
+    # Convert the flattened index to 2D coordinates
+    sim_index_2d = np.unravel_index(min_index, sim_lat.shape)
+    print("sim_index_2d:", sim_index_2d)
 
-# Initialize arrays to store matching data
-match_obs = np.zeros(len(site_lon))
-match_sim = np.zeros(len(site_lon))
-match_sim_lat = np.zeros(len(site_lon))
-match_sim_lon = np.zeros(len(site_lon))
-print("Shape of sim_conc:", sim_conc.shape)
-print("Contents of sim_conc:", sim_conc)
+    # Extract the corresponding latitude, longitude, and concentration
+    sim_lat_nearest = sim_lat[sim_index_2d[0]] # row index (latitude index)
+    sim_lon_nearest = sim_lon[sim_index_2d[1]] # column index (longitude index)
+    sim_conc_nearest = sim_conc[0, sim_index_2d[0], sim_index_2d[1]]
 
-# Calculate distance between the observation and all simulation points using cdist
-for k, (latk, lonk) in enumerate(zip(site_lat, site_lon)):
-    # Calculate distances between the observation and all simulation points
-    distances = cdist([[latk, lonk]], np.column_stack((sim_lat, sim_lon)), 'euclidean')[0]
-    # Select simulation points within a buffer around the observation's lat/lon
-    within_buffer = distances <= buffer
-    within_buffer = within_buffer.reshape((-1,))  # Reshape to match the dimension of sim_conc
-    if np.any(within_buffer):
-        # Extract relevant simulation data
-        sim_conck = sim_conc[within_buffer]
-        sim_lonk = sim_lon[within_buffer]
-        sim_latk = sim_lat[within_buffer]
-        # Find the nearest simulation point within the buffer
-        nearest_index = np.argmin(distances[within_buffer])
-        nearest_sim_lon = sim_lonk[nearest_index]
-        nearest_sim_lat = sim_latk[nearest_index]
-        nearest_sim_conc = sim_conck[nearest_index]
-        # Store matching data
-        match_sim[k] = nearest_sim_conc
-        match_sim_lat[k] = nearest_sim_lat
-        match_sim_lon[k] = nearest_sim_lon
+    # Append the data to the lists
+    sim_data.append((sim_lat_nearest, sim_lon_nearest, sim_conc_nearest))
+    site_data.append((site_lat, site_lon))
 
+# Create DataFrame with simulation and site data
+sim_site_df = pd.DataFrame(sim_data, columns=['sim_lat', 'sim_lon', 'sim_OMOC'])
+sim_site_df['site_lat'] = [data[0] for data in site_data]
+sim_site_df['site_lon'] = [data[1] for data in site_data]
 
-# Get unique lat/lon and OM/OC at the same simulation box
-coords_u = np.column_stack((match_sim_lat, match_sim_lon))
-unique_indices = np.unique(coords_u, axis=0, return_index=True)[1]
-match_lon_u = match_sim_lon[unique_indices]
-match_lat_u = match_sim_lat[unique_indices]
-match_sim_u = match_sim[unique_indices]
+# Merge site_df with sim_site_df based on latitude and longitude
+sim_site_df = pd.merge(sim_site_df, site_df[['Latitude', 'Longitude', 'Country', 'City']],
+                       left_on=['site_lat', 'site_lon'], right_on=['Latitude', 'Longitude'], how='left')
 
-columns = ['lat', 'lon', 'OMOC']
-merged_df = np.concatenate((match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None]), axis=1)
-merged_df = pd.DataFrame(data=merged_df, index=None, columns=columns)
+# Drop the redundant latitude and longitude columns from site_df
+sim_site_df.drop(columns=['Latitude', 'Longitude'], inplace=True)
 
 # Print the resulting DataFrame
-print(merged_df)
+print(sim_site_df)
 
 
-
-#
-# # Create DataFrame for current season
-# columns = ['lat', 'lon', 'OMOC', 'OC','OM','Residual']
-# compr_data = np.concatenate(
-#     (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None]), axis=1)
-# compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
-#
-# with pd.ExcelWriter(out_dir + 'OMOC_FTIROC_Residual_Summary.xlsx', engine='openpyxl') as writer:
-#     compr_df.to_excel(writer, sheet_name='Mon', index=False)
-#
+with pd.ExcelWriter(out_dir + 'OMOC_SPARTAN_Summary.xlsx', engine='openpyxl') as writer:
+    sim_site_df.to_excel(writer, sheet_name='DJF', index=False)
