@@ -928,7 +928,6 @@ IMPROVE_df = IMPROVE_df[IMPROVE_df['Year'] == 2019]
 IMPROVE_df = IMPROVE_df[IMPROVE_df['ECf_Status'] == 'V0']
 # Filter POC = 1
 IMPROVE_df = IMPROVE_df[IMPROVE_df['POC'] == 1]
-
 # Group by 'SiteName', 'Latitude', 'Longitude', and calculate monthly average 'ECf_Val'
 EC_mon_df = IMPROVE_df.groupby(['SiteName', 'Latitude', 'Longitude', 'Month'])['ECf_Val'].agg(['count', 'mean']).reset_index()
 EC_mon_df.columns = ['SiteName', 'Latitude', 'Longitude', 'Month', 'num_obs', 'EC_mon']
@@ -952,13 +951,25 @@ EC_annual_df.columns = ['SiteName', 'Latitude', 'Longitude', 'EC_annual']
 with pd.ExcelWriter(os.path.join(other_obs_dir + 'IMPROVE_EC_Summary.xlsx'), engine='openpyxl', mode='a') as writer:
     EC_annual_df.to_excel(writer, sheet_name='annual', index=False)
 
-
 ################################################################################################
-# Other: Summarize EMEP EC data -1
+# Other Measurements: Summarize EMEP EC data
 ################################################################################################
-
+## 1. Compile EC in raw EMEP '.nas' data
 other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
 EMEP_dir = other_obs_dir + '/EMEP_EC_2019_raw/'
+
+# Function to convert the floating-point number to datetime
+# Jan (1-31), Feb (32-59), Mar (60-90), Apr (91-120), May (121-151), June (152-181),
+# July (182-212), Aug (213-243), Sept (244-273), Oct (274-304), Nov (305-334),Dec(335-365)
+def convert_to_datetime(float_number):
+    base_date = datetime(2019, 1, 1)
+    integer_part = int(float_number)
+    fractional_part = float_number - integer_part
+    date_part = base_date + timedelta(days=integer_part - 1)
+    total_seconds = fractional_part * 24 * 3600
+    time_part = timedelta(seconds=total_seconds)
+    final_datetime = date_part + time_part
+    return final_datetime
 
 # Initialize empty list to store extracted information
 all_data = []
@@ -971,18 +982,14 @@ for filename in os.listdir(EMEP_dir):
             file_path = os.path.join(EMEP_dir, filename)
             with open(file_path, 'r', encoding='latin-1') as file:
                 lines = file.readlines()
-
-                # Extract station name
-                station_code = next(
-                    (line.split(':')[1].strip() for line in lines if line.startswith('Station code:')), '')
-
+                # Extract station code
+                station_code = next((line.split(':')[1].strip() for line in lines if line.startswith('Station code:')), '')
                 # Search for line starting with 'starttime'
                 start_index = None
                 for idx, line in enumerate(lines):
                     if line.startswith('starttime'):
                         start_index = idx
                         break
-
                 # If 'starttime' line found
                 if start_index is not None:
                     # Extract data from following lines
@@ -996,22 +1003,78 @@ for filename in os.listdir(EMEP_dir):
                     all_data.append((station_code, data))
 
 # Save data into separate spreadsheets
-with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_raw.xlsx'), engine='openpyxl', mode='w') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_2019_raw.xlsx'), engine='openpyxl', mode='w') as writer:
     for station_code, data in all_data:
         # Convert data into DataFrame
         df = pd.DataFrame(data)
-        df.to_excel(writer, sheet_name=station_code, index=False, header=False)
 
-################################################################################################
-# Other: Summarize EMEP EC data -2
-################################################################################################
+        # Assign headers from the first row
+        df.columns = df.iloc[0]
+        df = df[1:].reset_index(drop=True)
+        # Print the header of the DataFrame
+        print(f"Headers for station {station_code}: {df.columns.tolist()}")
 
+        # Convert 'starttime' and 'endtime' columns
+        if 'starttime' in df.columns and 'endtime' in df.columns:
+            df['start_time'] = df['starttime'].apply(convert_to_datetime)
+            df['end_time'] = df['endtime'].apply(convert_to_datetime)
+        df.to_excel(writer, sheet_name=station_code, index=False, header=True)
+
+## 2. Manually delete duplicate EC columns, select valid mesurements (000) and change all headter to starttime, endtime, EC, flag_EC, start_time, end_time to generate EMEP_EC_2019_processed.xlsx.
+
+## 3. Calaulte monthly average EC for each site
+other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+EMEP_EC = pd.ExcelFile(other_obs_dir + 'EMEP_EC_2019_processed.xlsx')
+# Dictionary to store summary data
+summary_data = {'Station Code': []}
+
+# Loop through each sheet
+for sheet_name in EMEP_EC.sheet_names:
+    # Read data from the current sheet
+    df = pd.read_excel(EMEP_EC, sheet_name)
+    # Extract station code from sheet name
+    station_code = sheet_name.replace('EMEP_EC_', '').replace('_processed', '')
+    # Convert 'start_time' column to datetime
+    df['start_time'] = pd.to_datetime(df['start_time'])
+    # Extract month from 'start_time'
+    df['Month'] = df['start_time'].dt.month
+    # Group data by month
+    grouped = df.groupby('Month')
+    # Calculate number of measurements, average, and standard error for each month
+    summary = grouped['EC'].agg(['count', 'mean', 'sem']).reset_index()
+    # Filter months with more than 10 rows
+    # summary = summary[summary['count'] > 10]
+    # Add station code to the summary data dictionary
+    summary_data['Station Code'].append(station_code)
+    # Merge summary data with the main summary dictionary
+    for month in range(1, 13):
+        month_data = summary[summary['Month'] == month]
+        if not month_data.empty:
+            summary_data[f'{month}_mean'] = summary_data.get(f'{month}_mean', []) + [month_data['mean'].iloc[0]]
+            summary_data[f'{month}_sem'] = summary_data.get(f'{month}_sem', []) + [month_data['sem'].iloc[0]]
+            summary_data[f'{month}_count'] = summary_data.get(f'{month}_count', []) + [month_data['count'].iloc[0]]
+        else:
+            summary_data[f'{month}_mean'] = summary_data.get(f'{month}_mean', []) + [0]
+            summary_data[f'{month}_sem'] = summary_data.get(f'{month}_sem', []) + [0]
+            summary_data[f'{month}_count'] = summary_data.get(f'{month}_count', []) + [0]
+
+# Create DataFrame from the summary data dictionary
+summary_df = pd.DataFrame(summary_data)
+# Reorder columns to have 'Station Code' at the beginning
+cols = summary_df.columns.tolist()
+cols = ['Station Code'] + [col for col in cols if col != 'Station Code']
+summary_df = summary_df[cols]
+
+# Write summary DataFrame to 'Summary' sheet of the Excel file
+with pd.ExcelWriter(EMEP_EC, mode='a', engine='openpyxl') as writer:
+    summary_df.to_excel(writer, sheet_name='Summary', index=False)
+
+## 4. Summarize site information from raw file
 other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
 EMEP_dir = other_obs_dir + '/EMEP_EC_2019_raw/'
 
 # Initialize empty lists to store extracted information
 EC_df = []
-
 # Initialize counters
 processed_files = 0
 
@@ -1024,7 +1087,6 @@ for filename in os.listdir(EMEP_dir):
             file_path = os.path.join(EMEP_dir, filename)
             with open(file_path, 'r', encoding='latin-1') as file:
                 lines = file.readlines()
-
                 # Extract required information
                 station_code = next((line.split(':')[1].strip() for line in lines if line.startswith('Station code:')),"")
                 station_name = next((line.split(':')[1].strip() for line in lines if line.startswith('Station name:')), "")
@@ -1034,6 +1096,7 @@ for filename in os.listdir(EMEP_dir):
                 unit = next((line.split(':')[1].strip() for line in lines if line.startswith('Unit:')), "")
                 analytical_measurement_technique = next((line.split(':')[1].strip() for line in lines if line.startswith('Analytical measurement technique:')), "")
                 # print(station_name, latitude, longitude)
+                # need to manually calculate EC mean and std
 
                 # Append extracted information to EC_df list
                 EC_df.append([station_code, station_name, latitude, longitude, component, unit, analytical_measurement_technique, filename])
@@ -1042,11 +1105,13 @@ for filename in os.listdir(EMEP_dir):
 df = pd.DataFrame(EC_df, columns=['Station Code', 'Station Name', 'Latitude', 'Longitude', 'Component', 'Unit', 'Analytical_Measurement_Technique', 'Filename'])
 
 # Save the DataFrame as an Excel file
-with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_Summary.xlsx'), engine='openpyxl', mode='w') as writer:
+with pd.ExcelWriter(os.path.join(other_obs_dir, 'EMEP_EC_Summary.xlsx'), engine='openpyxl', mode='a') as writer:
     df.to_excel(writer, index=False)
 
 # Print the counts
 print(f"Processed files: {processed_files}")
+
+## 5. Manually calculate mean EC from monthly data.
 
 ################################################################################################
 # Other: Combine measurement and GCHP dataset based on lat/lon
@@ -1370,7 +1435,7 @@ plt.tight_layout()
 
 plt.show()
 ################################################################################################
-# SPARTAN HIPS vs UV-Vis vs IBR
+# SPARTAN HIPS vs UV-Vis vs IBR vs FT-IR
 ################################################################################################
 # Set the directory path
 HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'

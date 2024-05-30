@@ -20,194 +20,99 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 from scipy import interpolate
 
+################################################################################################
+# SPARTAN HIPS vs UV-Vis vs IBR
+################################################################################################
 # Set the directory path
-FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
-Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
-OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
-site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/'
-
+HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
+UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
+IBR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
 ################################################################################################
-# Create scatter plot for Residual vs FTIR OM vs GCHP OM/OC, colored by region
+# plot HIPS vs IBR, color cell by no. of pairs
 ################################################################################################
-def get_city_index(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return cities.index(city)
-    return float('inf')  # If city is not found, place it at the end
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
-def map_city_to_color(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_color = region_colors[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
-            return assigned_color
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_marker = region_markers[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
-            return assigned_marker
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city)
-            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
-            return assigned_marker
-    return None
 # Read the file
-compr_df = pd.read_excel(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', sheet_name='all')
-compr_df.rename(columns={'City': 'city'}, inplace=True)
-compr_df['sim_OM'] = compr_df['sim_OMOC'] * compr_df['FTIR_OC']
-compr_df = compr_df.loc[compr_df['Residual'] < 50]
-# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
+merged_df = pd.read_excel(os.path.join(out_dir, 'BC_HIPS_IBR_SPARTAN.xlsx'))
+# Drop rows where f_BC is greater than 1
+# merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
+# Rename to simplify coding
+merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
+merged_df.rename(columns={"BC_IBR_(ug/m3)": "IBR"}, inplace=True)
+merged_df.rename(columns={"City": "city"}, inplace=True)
+# Multiply 'obs' column by 0.6 to reduce its values
+merged_df['HIPS'] *= 0.6
+# Create a 2D histogram to divide the area into squares and count data points in each square
+hist, xedges, yedges = np.histogram2d(merged_df['HIPS'], merged_df['IBR'], bins=60)
 
-# Print the names of each city
-unique_cities = compr_df['city'].unique()
-for city in unique_cities:
-    print(f"City: {city}")
+# Determine the color for each square based on the number of pairs
+colors = np.zeros_like(hist)
+for i in range(len(hist)):
+    for j in range(len(hist[i])):
+        pairs = hist[i][j]
+        colors[i][j] = pairs
 
-# Classify 'city' based on 'region'
-region_mapping = {
-    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
-    'Australia': ['Melbourne'],
-    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
-    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
-    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
-    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
-    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
-}
-region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
+# Define the custom color scheme gradient
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
-# Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
-region_colors = {
-    'North America': [
-        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
-    ],  # Blue shades
-    'Central Asia': [
-        (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
-    ],  # Purple shades
-    'Australia': [
-        (0.6, 0.4, 0.2)
-    ],  # Brown
-    'East Asia': [
-        (0, 0.5, 0), (0, 0.8, 0), (0, 1, 0), (0.56, 0.93, 0.56), (0.8, 0.9, 0.8)
-    ],  # Green shades
-    'South Asia': [
-        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.4, 0.4), (0.9, 0.6, 0.6)
-    ],  # Red shades
-    'Africa': [
-        (1, 0.4, 0), (1, 0.6, 0.14), (1, 0.63, 0.48), (1, 0.85, 0.73), (1, 0.96, 0.85)
-    ], # Orange shades
-    'South America': [
-        (1, 0.16, 0.827), (1, 0.42, 0.70), (0.8, 0.52, 0.7), (0.961, 0.643, 0.804), (1, 0.64, 0.64), (1, 0.76, 0.48)
-    ]  # Pink shades
-}
-
-# Create an empty list to store the city_palette for each city
-city_palette = []
-city_color_match = []
-# Iterate over each unique city and map it to a gradient
-for city in unique_cities:
-    city_color = map_city_to_color(city)
-    if city_color is not None:
-        city_palette.append(city_color)
-        city_color_match.append({'city': city, 'color': city_color})  # Store both city name and color
-print("City Palette:", city_palette)
-
-# Define custom palette for each region with 5 shades for each color
-region_markers = {
-    'North America': ['o', '^', 's', 'p', 'H', '*'],
-    'Australia': ['o', '^', 's', 'p', 'H', '*'],
-    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Africa': ['o', '^', 's', 'p', 'H', '*'],
-    'South America': ['o', '^', 's', 'p', 'H', '*'],
-}
-
-# Create an empty list to store the city_marker for each city
-city_marker = []
-city_marker_match = []
-
-# Iterate over each unique city and map it to a marker
-for city in unique_cities:
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        city_marker.append(marker)
-        city_marker_match.append({'city': city, 'marker': marker})
-
-print("City Marker:", city_marker)
-
-# Define the range of x-values for the two segments
-x_range = [compr_df['sim_OM'].min(), compr_df['sim_OM'].max()]
-
-# Filter the DataFrame to include only data from Africa and South Asia
-filtered_df = compr_df[compr_df['city'].isin(region_mapping['Africa'])]
-
-# Assign colors and markers based on the mapping dictionaries
-city_color_mapping = {city_info['city']: city_info['color'] for city_info in city_color_match}
-city_marker_mapping = {city_info['city']: city_info['marker'] for city_info in city_marker_match}
-
-# Assign colors and markers based on the mapping dictionaries
-filtered_df['color'] = filtered_df['city'].map(city_color_mapping)
-filtered_df['marker'] = filtered_df['city'].map(city_marker_mapping)
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 
-# Plot filtered data
-for index, row in filtered_df.iterrows():
-    plt.scatter(row['sim_OM'], row['FTIR_OM'], color=row['color'], marker=row['marker'], edgecolor='k', s=40, label=row['city'])
+# Plot the 2D histogram with the specified color scheme
+sns.set(font='Arial')
+scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
+
+# Display the original data points as a scatter plot
+# plt.scatter(merged_df['HIPS'], merged_df['IBR'], color='black', s=10, alpha=0.5)
 
 # Set title, xlim, ylim, ticks, labels
-plt.xlim([-5, 55])
-plt.ylim([-5, 55])
-plt.xticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
-plt.yticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+plt.xlim([merged_df['HIPS'].min()-0.5, 17])
+plt.ylim([merged_df['HIPS'].min()-0.5, 17])
+plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
 ax.tick_params(axis='x', direction='out', width=1, length=5)
 ax.tick_params(axis='y', direction='out', width=1, length=5)
 
-# Add 1:1 line with grey dash
-x = filtered_df['sim_OM']
-y = filtered_df['sim_OM']
-plt.plot([filtered_df['sim_OM'].min(), 50], [filtered_df['sim_OM'].min(), 50], color='grey', linestyle='--', linewidth=1)
+# Add 1:1 line with black dash
+x = merged_df['HIPS']
+y = merged_df['HIPS']
+plt.plot([merged_df['HIPS'].min(), merged_df['IBR'].max()], [merged_df['HIPS'].min(), merged_df['IBR'].max()], color='grey', linestyle='--', linewidth=1)
 
-# Perform linear regression for all segments
-mask = (filtered_df['sim_OM'] >= x_range[0]) & (filtered_df['sim_OM'] <= x_range[1])
-slope, intercept, r_value, p_value, std_err = stats.linregress(filtered_df['sim_OM'][mask], filtered_df['FTIR_OM'][mask])
+# Add number of data points to the plot
+num_points = len(merged_df)
+plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
 
-# Plot regression lines
-sns.regplot(x='sim_OM', y='FTIR_OM', data=filtered_df[mask],
-            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# Perform linear regression with NaN handling
+mask = ~np.isnan(merged_df['HIPS']) & ~np.isnan(merged_df['IBR'])
+slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['HIPS'][mask], merged_df['IBR'][mask])
+# Check for NaN in results
+if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
+    print("Linear regression results contain NaN values. Check the input data.")
+else:
+    # Add linear regression line and text
+    sns.regplot(x='HIPS', y='IBR', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
+    # Change the sign of the intercept for display
+    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
+    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
 
-# Add text with linear regression equations and other statistics
-intercept_display = abs(intercept)
-intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.1, 0.76, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+    # Update the text line with the adjusted intercept
+    plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+             transform=plt.gca().transAxes, fontsize=18)
 
-# Add the number of data points for each segment
-num_points = mask.sum()
-plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
-plt.text(0.70, 0.05, f'Africa', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+plt.xlabel('HIPS Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('IBR Black Carbon Concentration (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
-# Set labels
-plt.xlabel('FT-IR OC * GCHP OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('FTIR OM (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-ax.set_aspect(0.9 / 1)
-# Show the plot
+# Create the colorbar and specify font properties
+cbar_ax = fig.add_axes([0.68, 0.25, 0.02, 0.4])
+cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
+cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
+cbar.set_ticks([0, 25, 50, 75, 100], fontname='Arial', fontsize=14)
+
+# show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'GCHP_OMOC_FTIR_OC_vs_FTIR_OM_Africa.svg', dpi=300)
+plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_IBR_Mac6.svg"), format="SVG", dpi=300)
 plt.show()
