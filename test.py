@@ -153,5 +153,5 @@ for i, row in compar_notna.iterrows():
 # cbar.outline.set_edgecolor('black')
 # cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_China_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_China_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()

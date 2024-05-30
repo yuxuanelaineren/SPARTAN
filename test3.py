@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#-*- coding: utf-8 -*-
 
 import os
 import matplotlib.pyplot as plt
@@ -20,6 +20,7 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
+import h5py
 
 cres = 'C360'
 year = 2019
@@ -65,16 +66,18 @@ annual_v = None
 
 for face in range(6):
     for mon in range(1, 13):
-        sim_df = xr.open_dataset(
+        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+        with xr.open_dataset(
             sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
-            engine='netcdf4')  # CEDS
-        x = sim_df.corner_lons.isel(nf=face)
-        y = sim_df.corner_lats.isel(nf=face)
-        v = sim_df[species].isel(nf=face)
-        if annual_v is None:
-            annual_v = v
-        else:
-            annual_v = annual_v + v
+            engine='netcdf4') as sim_df:  # CEDS
+            x = sim_df.corner_lons.isel(nf=face)
+            y = sim_df.corner_lats.isel(nf=face)
+            v = sim_df[species].isel(nf=face).load()
+            if annual_v is None:
+                annual_v = v
+            else:
+                annual_v = annual_v + v
+        print("File closed.")
 
     # Calculate the annual average
     annual_v /= 12
