@@ -595,8 +595,8 @@ for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.4]
-x_range_2 = [2.4, compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 2.4*0.6]
+x_range_2 = [2.42.4*0.6, compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
@@ -756,6 +756,7 @@ plt.show()
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
 compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df['obs'] = 0.6 * compr_df['obs']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -763,8 +764,8 @@ for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.4]
-x_range_2 = [2.4, compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 2.4*0.6]
+x_range_2 = [2.4*0.6, compr_df['obs'].max()]
 x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
 
 # Define custom blue and red colors
@@ -869,10 +870,10 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12]) # 11 for edgar
-plt.ylim([-0.5, 12])
-plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
-plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.xlim([-0.5, 11.5])
+plt.ylim([-0.5, 11.5])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -892,13 +893,13 @@ sns.regplot(x='obs', y='sim', data=compr_df[mask],
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+plt.text(0.05, 0.64, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='black')
 
 # Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-plt.text(0.75, 0.05, f'N = {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.05, 0.58, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.85, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
 plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -906,10 +907,9 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Fig_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Fig_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 
 plt.show()
-
 ################################################################################################
 # Other: Summarize IMPROVE EC data
 ################################################################################################
