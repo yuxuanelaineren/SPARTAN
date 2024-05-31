@@ -44,7 +44,7 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 plt.style.use('default')
 plt.figure(figsize=(12, 5))
 left = 0.03
-bottom = 0.1
+bottom = 0.05
 width = 0.94
 height = 0.9
 ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
@@ -156,5 +156,5 @@ cbar.ax.tick_params(axis='y', labelsize=12)
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
