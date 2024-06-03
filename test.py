@@ -50,7 +50,7 @@ ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
 ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
 ax.set_global()
-# ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 # ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
 # ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
 # ax.set_extent([-20, 40, 35, 65], crs=ccrs.PlateCarree()) # Europe
@@ -119,24 +119,24 @@ for i, row in compar_notna.iterrows():
         plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
                     linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
 
-# # Calculate the global mean of simulated and observed data
-# global_mean_sim = np.nanmean(sim)
-# global_mean_obs = np.nanmean(obs)
-# global_std_sim = np.nanstd(sim)
-# global_std_obs = np.nanstd(obs)
-# # Adjust SPARTAN observations
-# compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
-# # # Calculate mean and standard error for SPARTAN sites
-# spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
-# mean_obs = np.mean(spartan_data['obs'])
-# std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
-# mean_sim = np.mean(spartan_data['sim'])
-# std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
-# # Add text annotations to the plot
-# ax.text(0.4, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# ax.text(0.4, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# ax.text(0.9, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+# Calculate the global mean of simulated and observed data
+global_mean_sim = np.nanmean(sim)
+global_mean_obs = np.nanmean(obs)
+global_std_sim = np.nanstd(sim)
+global_std_obs = np.nanstd(obs)
+# Adjust SPARTAN observations
+compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
+# # Calculate mean and standard error for SPARTAN sites
+spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+mean_obs = np.mean(spartan_data['obs'])
+std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+mean_sim = np.mean(spartan_data['sim'])
+std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# Add text annotations to the plot
+ax.text(0.3, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.9, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
 # Create an inset axes for the color bar at the left middle of the plot
 cbar_axes = inset_axes(ax,
@@ -154,5 +154,5 @@ cbar.ax.tick_params(axis='y', labelsize=12)
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_US_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.savefig('/Users/renyuxuan/Desktop/' + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_US_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
