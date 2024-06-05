@@ -46,14 +46,14 @@ left = 0.03
 bottom = 0.05
 width = 0.94
 height = 0.9
-ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax = plt.axes([left, bottom, width, height], projection=ccrs.PlateCarree())
 ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
 ax.set_global()
-ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
+# ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
 # ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
 # ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
-# ax.set_extent([-20, 40, 35, 65], crs=ccrs.PlateCarree()) # Europe
+ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
 
 # Define the colormap
 colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
@@ -119,40 +119,40 @@ for i, row in compar_notna.iterrows():
         plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
                     linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
 
-# Calculate the global mean of simulated and observed data
-global_mean_sim = np.nanmean(sim)
-global_mean_obs = np.nanmean(obs)
-global_std_sim = np.nanstd(sim)
-global_std_obs = np.nanstd(obs)
-# Adjust SPARTAN observations
-compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
-# # Calculate mean and standard error for SPARTAN sites
-spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
-mean_obs = np.mean(spartan_data['obs'])
-std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
-mean_sim = np.mean(spartan_data['sim'])
-std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
-# Add text annotations to the plot
-ax.text(0.3, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.3, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.9, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+# # Calculate the global mean of simulated and observed data
+# global_mean_sim = np.nanmean(sim)
+# global_mean_obs = np.nanmean(obs)
+# global_std_sim = np.nanstd(sim)
+# global_std_obs = np.nanstd(obs)
+# # Adjust SPARTAN observations
+# compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
+# # # Calculate mean and standard error for SPARTAN sites
+# spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+# mean_obs = np.mean(spartan_data['obs'])
+# std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+# mean_sim = np.mean(spartan_data['sim'])
+# std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# # Add text annotations to the plot
+# ax.text(0.3, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.9, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+#
+# # Create an inset axes for the color bar at the left middle of the plot
+# cbar_axes = inset_axes(ax,
+#                            width='2%',
+#                            height='50%',
+#                            bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
+#                            bbox_transform=ax.transAxes,
+#                            borderpad=0,
+#                            )
+# cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+# font_properties = font_manager.FontProperties(family='Arial', size=12)
+# cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+# cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+# cbar.ax.tick_params(axis='y', labelsize=12)
+# cbar.outline.set_edgecolor('black')
+# cbar.outline.set_linewidth(1)
 
-# Create an inset axes for the color bar at the left middle of the plot
-cbar_axes = inset_axes(ax,
-                           width='2%',
-                           height='50%',
-                           bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
-                           bbox_transform=ax.transAxes,
-                           borderpad=0,
-                           )
-cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
-font_properties = font_manager.FontProperties(family='Arial', size=12)
-cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
-cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-cbar.ax.tick_params(axis='y', labelsize=12)
-cbar.outline.set_edgecolor('black')
-cbar.outline.set_linewidth(1)
-
-plt.savefig('/Users/renyuxuan/Desktop/' + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_US_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig('/Users/renyuxuan/Desktop/' + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_Europe_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
