@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 import matplotlib.pyplot as plt
@@ -20,6 +18,8 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
+import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
 
 cres = 'C360'
 year = 2019
@@ -37,122 +37,57 @@ obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Other: Map SPARTAN and GCHP data for the entire year
+# Beijing: Plot seasonal variations
 ################################################################################################
-# Map SPARTAN and GCHP data for the entire year
-plt.style.use('default')
-plt.figure(figsize=(12, 5))
-left = 0.03
-bottom = 0.05
-width = 0.94
-height = 0.9
-ax = plt.axes([left, bottom, width, height], projection=ccrs.PlateCarree())
-ax.coastlines(color=(0.4, 0.4, 0.4))
-ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
-ax.set_global()
-# ax.set_extent([-140, 160, -60, 60], crs=ccrs.PlateCarree())
-# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
-# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
-ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# Read the data
+df = pd.read_csv('/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/CHTS_master.csv')
+BC_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3', 'BC_SSR_ug',
+                'BC_HIPS_ug', 'Flags']
+df = df[BC_columns].copy()
+# Exclide invald data
+df['Mass_type'] = pd.to_numeric(df['Mass_type'], errors='coerce')
+df = df.loc[df['Mass_type'] == 1]
+df[['start_year', 'start_month', 'start_day', 'Volume_m3', 'BC_SSR_ug']] = df[
+                    ['start_year', 'start_month', 'start_day', 'Volume_m3', 'BC_SSR_ug']].apply(pd.to_numeric, errors='coerce')
+df = df.dropna(subset=['start_year', 'start_month', 'start_day', 'Volume_m3', 'BC_SSR_ug'])
+df = df[df['Volume_m3'] > 0]
+df = df[df['BC_SSR_ug'] > 0]
+# Calculate BC concentration
+df['BC_conc'] = df['BC_SSR_ug'] / df['Volume_m3']
 
-# Define the colormap
-colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
-cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
-vmax = 4
+# Create a datetime column by combining year, month, and day
+df['start_year'] = pd.to_numeric(df['start_year'], errors='coerce').fillna(0).astype(int)
+df['start_month'] = pd.to_numeric(df['start_month'], errors='coerce').fillna(0).astype(int)
+df['start_day'] = pd.to_numeric(df['start_day'], errors='coerce').fillna(0).astype(int)
+# Drop rows with invalid dates (e.g., month > 12 or day > 31)
+df = df[(df['start_month'] >= 1) & (df['start_month'] <= 12) &
+        (df['start_day'] >= 1) & (df['start_day'] <= 31)]
+# Combine year, month, and day into a single datetime column
+# df['datetime'] = pd.to_datetime(df[['start_year', 'start_month', 'start_day']])
+df['datetime'] = pd.to_datetime(df['start_year'].astype(str) + '-' +
+                                df['start_month'].astype(str).str.zfill(2) + '-' +
+                                df['start_day'].astype(str).str.zfill(2))
+# Sort data by datetime
+df = df.sort_values('datetime')
 
-# Accumulate data for each face over the year
-annual_v = None
-for face in range(6):
-    for mon in range(1, 13):
-        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
-        with xr.open_dataset(
-            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon),
-            engine='netcdf4') as sim_df:  # CEDS
-            x = sim_df.corner_lons.isel(nf=face)
-            y = sim_df.corner_lats.isel(nf=face)
-            v = sim_df[species].isel(nf=face).load()
-            if annual_v is None:
-                annual_v = v
-            else:
-                annual_v = annual_v + v
-        print("File closed.")
+# Plot the time series
+plt.figure(figsize=(12, 6))
+plt.plot(df['datetime'], df['BC_conc'], marker='o', linestyle='None', markersize=8, markeredgewidth=0.5, markeredgecolor='black')
+border_width = 1
 
-    # Calculate the annual average
-    annual_v /= 12
-    annual_v = annual_v.squeeze()
-    print(x.shape, y.shape, annual_v.shape)
+# Use MonthLocator or YearLocator for fewer ticks
+plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+# Alternatively, limit the number of ticks shown
+# plt.gca().xaxis.set_major_locator(MaxNLocator(nbins=10))
 
-    # Plot the annual average data for each face
-    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
-
-# Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
-                          sheet_name='Annual')
-compar_notna = compar_df[compar_df.notna().all(axis=1)]
-lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
-print(compar_notna['source'].unique())
-
-# Define marker sizes
-s1 = [40] * len(obs)  # inner circle: Measurement
-s2 = [120] * len(obs)  # outer ring: Simulation
-markers = {'SPARTAN': 'o', 'other': 's'}
-
-# Create scatter plot for other data points (squares)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source != 'SPARTAN':  # Exclude SPARTAN data for now
-        marker = markers.get(source, 'o')
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
-
-# Create scatter plot for SPARTAN data points (circles)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source == 'SPARTAN':  # Plot SPARTAN data
-        marker = markers.get(source, 'o')
-        # Convert from MAC=6 to MAC=10 in HIPS BC
-        row['obs'] = row['obs'] * 0.6
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=1, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
-
-# # Calculate the global mean of simulated and observed data
-# global_mean_sim = np.nanmean(sim)
-# global_mean_obs = np.nanmean(obs)
-# global_std_sim = np.nanstd(sim)
-# global_std_obs = np.nanstd(obs)
-# # Adjust SPARTAN observations
-# compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
-# # # Calculate mean and standard error for SPARTAN sites
-# spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
-# mean_obs = np.mean(spartan_data['obs'])
-# std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
-# mean_sim = np.mean(spartan_data['sim'])
-# std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
-# # Add text annotations to the plot
-# ax.text(0.3, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# ax.text(0.3, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# ax.text(0.9, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
-#
-# # Create an inset axes for the color bar at the left middle of the plot
-# cbar_axes = inset_axes(ax,
-#                            width='2%',
-#                            height='50%',
-#                            bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
-#                            bbox_transform=ax.transAxes,
-#                            borderpad=0,
-#                            )
-# cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
-# font_properties = font_manager.FontProperties(family='Arial', size=12)
-# cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
-# cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-# cbar.ax.tick_params(axis='y', labelsize=12)
-# cbar.outline.set_edgecolor('black')
-# cbar.outline.set_linewidth(1)
-
-plt.savefig('/Users/renyuxuan/Desktop/' + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_Europe_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.xticks(fontname='Arial', size=12, rotation=45)
+plt.ylim([0, 20])
+plt.yticks([0, 3, 6, 9, 12, 15, 18], fontname='Arial', size=18)
+plt.xlabel('Date', fontname='Arial', size=18)
+plt.ylabel('SSR BC Concentration (µg/m$^3$)', fontsize=18, fontname='Arial')
+plt.title('Time Series of BC Concentration in Beijing', fontsize=20, color='black', fontname='Arial')
+plt.grid(True, linestyle='--', linewidth=0.7)
+plt.tight_layout()
+plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/' + 'BC_TimeSeries_Beijing_SSR.svg', dpi=300)
 plt.show()
