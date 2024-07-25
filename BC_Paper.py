@@ -243,18 +243,21 @@ for mon in range(1, 13):
     print(f'Observed_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
 
 # Combine monthly data to create the annual DataFrame
-annual_df = pd.concat(monthly_data, ignore_index=True)
-annual_df['month'] = annual_df['month'].astype(int)
-# Calculate annual average for each site
-annual_average_df = annual_df.groupby(['country', 'city']).agg({
-    'sim': 'mean',
-    'obs': 'mean',
+monthly_df = pd.concat(monthly_data, ignore_index=True)
+monthly_df['month'] = monthly_df['month'].astype(int)
+# Calculate annual average and standard error for each site
+annual_df = monthly_df.groupby(['country', 'city']).agg({
+    'sim': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
+    'obs': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
     'num_obs': 'sum',
     'lat': 'mean',
-    'lon': 'mean' }).reset_index()
+    'lon': 'mean'
+}).reset_index()
+annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
+
 with pd.ExcelWriter(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
-    annual_df.to_excel(writer, sheet_name='Mon', index=False)
-    annual_average_df.to_excel(writer, sheet_name='Annual', index=False)
+    monthly_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_df.to_excel(writer, sheet_name='Annual', index=False)
 
 sim_df.close()
 
@@ -589,6 +592,7 @@ plt.show()
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
 compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 compr_df['obs'] = 0.6 * compr_df['obs']
+compr_df['obs_se'] = 0.6 * compr_df['obs_se']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -625,14 +629,12 @@ city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city
 sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
 
 # Classify 'city' based on 'region'
-
 def get_region_for_city(city):
     for region, cities in region_mapping.items():
         if city in cities:
             return region
     print(f"Region not found for city: {city}")
     return None
-
 region_mapping = {
     'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
     'Australia': ['Melbourne'],
@@ -643,7 +645,6 @@ region_mapping = {
     'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
 }
 region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
-
 region_markers = {
     'North America': ['o', 'o', 'o', 'p', 'H', '*'],
     'Australia': ['o', '^', 's', 'p', 'H', '*'],
@@ -656,7 +657,6 @@ region_markers = {
 # Create an empty list to store the city_marker for each city
 city_marker = []
 city_marker_match = []
-
 def map_city_to_marker(city):
     for region, cities in region_mapping.items():
         if city in cities:
@@ -678,7 +678,6 @@ def map_city_to_marker(city):
                 return 'o'  # Default marker style
     print(f"City not found in any region: {city}")
     return 'o'
-
 # Iterate over each unique city and map it to a marker
 for city in unique_cities:
     marker = map_city_to_marker(city)
@@ -688,30 +687,38 @@ for city in unique_cities:
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
-# Create scatter plot
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city',  markers=city_marker)
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 12], [-0.5, 12], color='grey', linestyle='--', linewidth=1, zorder=1)
+# Add error bars
+for i in range(len(compr_df)):
+    ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
+                xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
+                fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
+# Create scatter plot
+scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
+
+# Customize axis spines
+for spine in ax.spines.values():
+    spine.set_edgecolor('black')
+    spine.set_linewidth(1)
 
 # Customize legend markers
 handles, labels = scatterplot.get_legend_handles_labels()
 sorted_handles = [handles[list(labels).index(city)] for city in sorted_cities]
-border_width = 1.5
+border_width = 1
 # Customize legend order
 legend = plt.legend(handles=sorted_handles, labels=sorted_cities, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12, markerscale=1.25)
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 10]) # 14 for edgar
-plt.ylim([-0.5, 10])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.xlim([-0.5, 12])
+plt.ylim([-0.5, 12])
+plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
-
-# Add 1:1 line with grey dash
-plt.plot([compr_df['obs'].min(), 10], [compr_df['obs'].min(), 10],
-         color='grey', linestyle='--', linewidth=1)
 
 # Perform linear regression for the first segment
 mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
@@ -728,16 +735,24 @@ intercept_display_1 = abs(intercept_1)
 intercept_display_2 = abs(intercept_2)
 intercept_sign_1 = '-' if intercept_1 < 0 else '+'
 intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.05, 0.76, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+plt.text(0.6, 0.83, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.05, 0.51, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+plt.text(0.6, 0.61, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='red')
-
 # Add the number of data points for each segment
 num_points_1 = mask_1.sum()
-plt.text(0.05, 0.70, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
 num_points_2 = mask_2.sum()
-plt.text(0.05, 0.45, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+
+# plt.text(0.05, 0.76, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+#          transform=scatterplot.transAxes, fontsize=18, color='blue')
+# plt.text(0.05, 0.51, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+#          transform=scatterplot.transAxes, fontsize=18, color='red')
+# num_points_1 = mask_1.sum()
+# plt.text(0.05, 0.70, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+# num_points_2 = mask_2.sum()
+# plt.text(0.05, 0.45, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
 # Set labels
 plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -745,8 +760,7 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig_b_r_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC10_HIPS.svg'.format(cres, inventory, deposition, species, year), dpi=300)
-
+# plt.savefig(out_dir + 'FigS2_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC10_HIPS_SE.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
 
 ################################################################################################
@@ -1820,5 +1834,5 @@ plt.ylabel('BC Concentration (µg/m$^3$)', fontsize=18, fontname='Arial')
 plt.title('Time Series of BC Concentration in Beijing', fontsize=20, color='black', fontname='Arial')
 plt.grid(True, linestyle='--', linewidth=0.7)
 plt.tight_layout()
-plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/' + 'BC_TimeSeries_Beijing_SSR_HIPS.svg', dpi=300)
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/' + 'BC_TimeSeries_Beijing_SSR_HIPS.svg', dpi=300)
 plt.show()
