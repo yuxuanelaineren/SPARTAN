@@ -1457,10 +1457,10 @@ plt.show()
 # Other: Create scatter plot, all black
 ################################################################################################
 # Read the file
-# compr_df = pd.read_csv(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}07_MonMean.csv'.format(cres, inventory, deposition, species, year)))
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 # Convert from MAC=6 to MAC=10 in HIPS BC
 compr_df.loc[compr_df['source'] == 'SPARTAN', 'obs'] *= 0.6
+# compr_df = compr_df[compr_df['country'] == 'China']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -1483,9 +1483,33 @@ compr_df['color'] = compr_df['obs'].apply(assign_color)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(7, 6))
+
+# Define marker styles for each category
+# markers = {
+#     'Australia': 'o',
+#     'Global South': 's',
+#     'North America': 'D',
+#     'Israel': '^',
+#     'Korea': 'v',
+#     'Europe': 'p'
+# }
+# scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=60, alpha=0.8, style='marker', markers=markers, hue='color', palette=['blue', 'red'], edgecolor='k')
+# Define colors for each value in the 'marker' column
+
+
 # Create scatter plot with different markers for SPARTAN and other
 markers = {'SPARTAN': 'o', 'other': 's'}
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=60, alpha=0.8, style='source', markers=markers, hue='color', palette=['blue', 'red'], edgecolor='k')
+# color_palette = {
+#     'Australia': 'blue',
+#     'Global South': 'green',
+#     'North America': 'red',
+#     'Israel': 'purple',
+#     'Korea': 'orange',
+#     'Europe': 'brown'
+# }
+# scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=60, alpha=0.8, hue='marker', palette=color_palette, style='source',markers=markers, edgecolor='k')
+
+scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=60, alpha=0.9, style='source', markers=markers, hue='color', palette=[(0, 0.2, 0.9), (0.7, 0, 0)], edgecolor='k')
 
 sns.set(font='Arial')
 # scatterplot.set_xscale('log')
@@ -1512,12 +1536,12 @@ sns.regplot(x='obs', y='sim', data=compr_df[mask], scatter=False, ci=None, line_
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+plt.text(0.6, 0.85, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='black')
 
 # Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+plt.text(0.6, 0.79, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
 # plt.text(0.75, 0.05, f'{year}', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
@@ -1526,8 +1550,8 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Create a custom legend for the source only
 import matplotlib.lines as mlines
-spartan_legend = mlines.Line2D([], [], color='blue', marker='o', linestyle='None', markersize=8, label='SPARTAN')
-other_legend = mlines.Line2D([], [], color='blue', marker='s', linestyle='None', markersize=8, label='other')
+spartan_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='o', linestyle='None', markersize=8, label='SPARTAN')
+other_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='s', linestyle='None', markersize=8, label='other meas')
 legend = plt.legend(handles=[spartan_legend, other_legend], fontsize=12, frameon=False, loc='lower right')
 plt.setp(legend.get_texts(), fontname='Arial')
 legend.get_frame().set_facecolor('white')
@@ -1535,7 +1559,7 @@ legend.get_frame().set_facecolor('white')
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS4_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean.svg'.format(cres, inventory, deposition, species), dpi=300)
+# plt.savefig(out_dir + 'FigS4_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean_MAC10.svg'.format(cres, inventory, deposition, species), dpi=300)
 
 plt.show()
 ################################################################################################
