@@ -78,24 +78,15 @@ for mon in range(1, 13):
     # pop = np.where(land_mask, pop, np.nan)
 
     # Population-weighted conc (pwm)
-    pw_conc = np.empty_like(sim_conc)
-    for level in range(sim_conc.shape[0]):
-        pop_level = pop[level, :, :]
-        conc_level = sim_conc[level, :, :]
-        total_pop = np.nansum(pop_level)
-        if total_pop != 0:
-            pw_conc[level, :, :] = np.nansum(pop_level * conc_level) / total_pop
-        else:
-            pw_conc[level, :, :] = np.nan
-
-    # pw_conc = np.nansum(pop * sim_conc, axis=0) / np.nansum(pop, axis=0) # compute pw conc for each grid point, across the 6 levels.
-    print(f'pw_conc shape: {pw_conc.shape}')
-    # ind = np.where(~np.isnan(sim_conc))
-    # N = len(sim_conc[ind])
-    # pwm = np.nansum(pop[ind] * sim_conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
-    # pwstd = np.sqrt(np.nansum(pop[ind] * (sim_conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
-    # pwse = pwstd / np.sqrt(N)
-    # print(f"Population-weighted mean (pwm): {pwm}")
+    pw_conc = (pop * sim_conc) / np.nansum(pop) # compute pw conc for each grid point, would be super small and not-meaningful
+    ind = np.where(~np.isnan(sim_conc))
+    N = len(sim_conc[ind])
+    pwm = np.nansum(pop[ind] * sim_conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
+    pwstd = np.sqrt(np.nansum(pop[ind] * (sim_conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
+    pwse = pwstd / np.sqrt(N)
+    print(f"Population-weighted mean (pwm): {pwm}")
+    print(f"Population-weighted std (pwstd): {pwstd}")
+    print(f"Population-weighted se (pwse): {pwse}")
 
     # Filter obs_df based on 'start_month'
     obs_df = obs_df[obs_df['start_month'] == mon]
@@ -115,13 +106,14 @@ for mon in range(1, 13):
     match_sim_lon = np.zeros(len(obs_lon))
     match_sim_lat = np.zeros(len(obs_lon))
     match_sim = np.zeros(len(obs_lon))
-    match_pw_conc = np.zeros(len(obs_lon))
+    # match_pw_conc = np.zeros(len(obs_lon))
+    # match_pop = np.zeros(len(obs_lon))
 
     # Calculate distance between the observation and all simulation points
     for k in range(len(obs_lon)):
         # Spherical law of cosines:
         R = 6371  # Earth radius 6371 km
-        buffer = 15  # 10-degree radius
+        buffer = 10  # 10-degree radius
         latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
         lonk = obs_lon.iloc[k]
         # Select simulation points within a buffer around the observation's lat/lon
@@ -131,7 +123,8 @@ for mon in range(1, 13):
         sim_lonk = sim_lon[ind]
         sim_latk = sim_lat[ind]
         sim_conck = sim_conc[ind]
-        sim_pw_conck = pw_conc[ind]
+        # sim_pw_conck = pw_conc[ind]
+        # popk = pop[ind]
         # Calculate distance between the observation and selected simulation points
         dd = np.arccos(np.sin(latk * np.pi / 180) * np.sin(sim_latk * np.pi / 180) + \
                        np.cos(latk * np.pi / 180) * np.cos(sim_latk * np.pi / 180) * np.cos(
@@ -141,7 +134,8 @@ for mon in range(1, 13):
         # Use iloc to access the element by integer position
         match_obs[k] = obs_conc.iloc[k]
         match_sim[k] = np.nanmean(sim_conck[ii])
-        match_pw_conc[k] = np.nanmean(sim_pw_conck[ii])
+        # match_pw_conc[k] = np.nanmean(sim_pw_conck[ii])
+        # match_pop[k] = np.nanmean(popk[ii])
         match_sim_lat[k] = np.nanmean(sim_latk[ii])
         match_sim_lon[k] = np.nanmean(sim_lonk[ii])
 
@@ -151,7 +145,8 @@ for mon in range(1, 13):
     match_lon_u = match_sim_lon[ind]
     match_lat_u = match_sim_lat[ind]
     match_sim_u = match_sim[ind]
-    match_pw_conc_u = match_pw_conc[ind]
+    # match_pw_conc_u = match_pw_conc[ind]
+    # match_pop_u = match_pop[ind]
     match_obs_u = np.zeros(len(ct))
     # Calculate the monthly average observation data for each unique simulation box
     for i in range(len(ct)):
@@ -160,24 +155,19 @@ for mon in range(1, 13):
 
     # Drop rows with NaN values from the final data
     nanindex = np.argwhere(
-        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_pw_conc_u) | np.isnan(match_obs_u))).squeeze()
+        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_obs_u))).squeeze()
     match_lon_u = np.delete(match_lon_u, nanindex)
     match_lat_u = np.delete(match_lat_u, nanindex)
     match_sim_u = np.delete(match_sim_u, nanindex)
     match_obs_u = np.delete(match_obs_u, nanindex)
-    match_pwm_u = np.delete(match_pw_conc_u, nanindex)
+    # match_pwm_u = np.delete(match_pw_conc_u, nanindex)
+    # match_pop = np.delete(match_pop_u, nanindex)
     ct = np.delete(ct, nanindex)
-    print(f'match_lat_u shape: {match_lat_u.shape}')
-    print(f'match_lon_u shape: {match_lon_u.shape}')
-    print(f'match_sim_u shape: {match_sim_u.shape}')
-    print(f'match_obs_u shape: {match_obs_u.shape}')
-    # print(f'match_pw_conc_u shape: {match_pw_conc_u.shape}')
-    print(f'ct shape: {ct.shape}')
+
     # Create DataFrame for current month
-    columns = ['lat', 'lon', 'sim', 'obs', 'pw_conc', 'num_obs']
+    columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
     compr_data = np.concatenate(
-        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], match_pw_conc_u[:, None],
-         ct[:, None]), axis=1)
+        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], ct[:, None]), axis=1)
     compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
     compr_df['month'] = mon
     # Apply the function to 'compr_df' and create new columns
@@ -185,10 +175,9 @@ for mon in range(1, 13):
                                                    result_type='expand')
     print(compr_df)
 
-    # Save monthly CSV file
+    # # Save monthly CSV file
     # outfile = os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon))
     # compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
-
     # Append data to the monthly_data list
     monthly_data.append(compr_df)
 
@@ -200,13 +189,13 @@ for mon in range(1, 13):
     mean_obs = np.nanmean(match_obs_u)
     sd_obs = np.nanstd(match_obs_u)
     se_obs = sd_obs / np.sqrt(N)
-    mean_pw_conc = np.nanmean(match_pw_conc_u)
-    sd_pw_conc = np.nanstd(match_pw_conc_u)
-    se_pw_conc = sd_pw_conc / np.sqrt(N)
+    # mean_pw_conc = np.nanmean(match_pw_conc_u)
+    # sd_pw_conc = np.nanstd(match_pw_conc_u)
+    # se_pw_conc = sd_pw_conc / np.sqrt(N)
     # Print the results
     print(f'Simulated Mean: {mean_sim:.2f}, SE: {se_sim:.2f}')
     print(f'Observed Mean: {mean_obs:.2f}, SE: {se_obs:.2f}')
-    print(f'PWM: {mean_pw_conc:.2f}, PWSE: {se_pw_conc:.2f}')
+    # print(f'PWM: {mean_pw_conc:.2f}, PWSE: {se_pw_conc:.2f}')
 
 # Combine monthly data to create the annual DataFrame
 monthly_df = pd.concat(monthly_data, ignore_index=True)
@@ -215,12 +204,11 @@ monthly_df['month'] = monthly_df['month'].astype(int)
 annual_df = monthly_df.groupby(['country', 'city']).agg({
     'sim': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
     'obs': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
-    'pwm': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
     'num_obs': 'sum',
     'lat': 'mean',
     'lon': 'mean'
 }).reset_index()
-annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'pwm_conc', 'pwse_conc','num_obs', 'lat', 'lon']
+annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
 
 with pd.ExcelWriter(out_dir + '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary_new.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
     monthly_df.to_excel(writer, sheet_name='Mon', index=False)

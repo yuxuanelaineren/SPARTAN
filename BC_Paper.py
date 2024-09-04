@@ -120,20 +120,11 @@ def find_and_add_location(lat, lon):
 
 # Create empty lists to store data for each month
 monthly_data = []
-
-# Loop through each month
 for mon in range(1, 13):
     # sim_df = xr.open_dataset(sim_dir + 'WUCR3.LUO_WETDEP.C360.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(year, mon), engine='netcdf4') # EDGAR
     # sim_df = xr.open_dataset(sim_dir + '{}.LUO.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') # HTAP
     # sim_df = xr.open_dataset(sim_dir + 'C720.LUO.PM25.RH35.NOx.O3.fromMonHourly.201801.MonMean.nc4', engine='netcdf4') # c720, HTAP
     sim_df = xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') # CEDS
-    obs_df = pd.read_excel(out_dir + 'BC_HIPS_SPARTAN.xlsx', sheet_name='All')
-    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                            usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
-
-    # Filter obs_df based on 'start_month'
-    obs_df = obs_df[obs_df['start_month'] == mon]
-
     # Extract nf, Ydim, Xdim, lon/lat, buffer, and BC from simulation data
     nf = np.array(sim_df.nf)
     Ydim = np.array(sim_df.Ydim)
@@ -141,15 +132,19 @@ for mon in range(1, 13):
     sim_lon = np.array(sim_df.lons).astype('float32')
     sim_lon[sim_lon > 180] -= 360
     sim_lat = np.array(sim_df.lats).astype('float32')
-
-    sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    # sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
     sim_conc = np.array(sim_df[species]).reshape([6, 360, 360])
-    buffer = 10
+    # pw_conc = (pop * sim_conc) / np.nansum(pop)  # compute pw conc for each grid point, would be super small and not-meaningful
 
+    # Load the Data
+    obs_df = pd.read_excel(out_dir + 'BC_HIPS_SPARTAN.xlsx', sheet_name='All')
+    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
+                            usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
+    # Filter obs_df based on 'start_month'
+    obs_df = obs_df[obs_df['start_month'] == mon]
     # Drop NaN and infinite values from obs_conc
     obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
     obs_df = obs_df.dropna(subset=[species], thresh=1)
-
     # Extract lon/lat, BC, BC/PM25, and BC/SO4 from observation data
     obs_lon = obs_df['Longitude']
     obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
@@ -169,8 +164,9 @@ for mon in range(1, 13):
     for k in range(len(obs_lon)):
         # Spherical law of cosines:
         R = 6371  # Earth radius 6371 km
+        buffer = 10  # 10-degree radius
         latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
-        lonk = obs_lon.iloc[k]  # Use .iloc to access value by integer location
+        lonk = obs_lon.iloc[k]
         # Select simulation points within a buffer around the observation's lat/lon
         ind = np.where((sim_lon > lonk - buffer) & (sim_lon < lonk + buffer)
                        & (sim_lat > latk - buffer) & (sim_lat < latk + buffer))
@@ -217,12 +213,9 @@ for mon in range(1, 13):
     compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
     # Add a 'month' column to the DataFrame
     compr_df['month'] = mon
-    compr_df['year'] = obs_year
-
     # Apply the function to 'compr_df' and create new columns
     compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
                                                    result_type='expand')
-    # Display the updated 'compr_df'
     print(compr_df)
 
     # Save monthly CSV file
@@ -241,7 +234,7 @@ for mon in range(1, 13):
     max_obs = np.nanmax(match_obs_u)
     # Print the results
     print(f'Simulated_{species}_in_{mon} Mean: {mean_sim:.2f}, SD: {sd_sim:.2f}, Max: {max_sim:.2f}')
-    print(f'Observed_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
+    print(f'Measured_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
 
 # Combine monthly data to create the annual DataFrame
 monthly_df = pd.concat(monthly_data, ignore_index=True)
