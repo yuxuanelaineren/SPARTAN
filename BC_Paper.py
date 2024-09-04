@@ -37,7 +37,7 @@ sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/m
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
-
+support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 ################################################################################################
 # Extract BC_HIPS from masterfile and lon/lat from site.details
 ################################################################################################
@@ -1331,6 +1331,46 @@ sim_df.close()
 ################################################################################################
 # Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
 ################################################################################################
+# Calculate Population-weighted conc (pwm)
+annual_conc = None
+annual_pop = None
+for mon in range(1, 13):
+    # Load simulated data
+    with xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:
+        conc = sim_df[species].values
+    # Load population data
+    pop_df = xr.open_dataset(support_dir + 'Regrid.PopDen.latlon.1800x3600.to.{}.conserve.2015.nc4'.format(cres.upper())).squeeze()
+    pop = pop_df['pop'].values
+
+    # # Mask out sea areas
+    # lsmask_df = xr.open_dataset(support_dir + 'Regrid.LL.1800x3600.{}.neareststod.landseamask.nc'.format(cres.upper())).squeeze()
+    # lsmask = lsmask_df['mask'].values
+    # land_mask = lsmask < 50  # < 50 represents land
+    # conc = np.where(land_mask, conc, np.nan)
+    # pop = np.where(land_mask, pop, np.nan)
+
+    conc = conc.flatten()
+    pop = pop.flatten()
+
+    if annual_conc is None:
+        annual_conc = conc
+        annual_pop = pop
+    else:
+        annual_conc += conc
+annual_conc /= 12
+annual_conc = annual_conc.squeeze()
+# Calculate Population-weighted conc (pwm)
+conc = annual_conc.flatten()
+pop = annual_pop.flatten()
+ind = np.where(~np.isnan(conc))
+N = len(conc[ind])
+pwm = np.nansum(pop[ind] * conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
+pwstd = np.sqrt(np.nansum(pop[ind] * (conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
+pwse = pwstd / np.sqrt(N)
+print(f"Population-weighted mean (pwm): {pwm}")
+print(f"Population-weighted std (pwstd): {pwstd}")
+print(f"Population-weighted se (pwse): {pwse}")
+
 # Map SPARTAN and GCHP data for the entire year
 plt.style.use('default')
 plt.figure(figsize=(10, 5))
@@ -1355,7 +1395,7 @@ cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 vmax = 4
 
 # Accumulate data for each face over the year
-annual_v = None
+annual_conc = None
 for face in range(6):
     for mon in range(1, 13):
         print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
@@ -1363,23 +1403,25 @@ for face in range(6):
             sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:  # CEDS
             x = sim_df.corner_lons.isel(nf=face)
             y = sim_df.corner_lats.isel(nf=face)
-            v = sim_df[species].isel(nf=face).load()
-            if annual_v is None:
-                annual_v = v
+            conc = sim_df[species].isel(nf=face).load()
+            if annual_conc is None:
+                annual_conc = conc
             else:
-                annual_v = annual_v + v
+                annual_conc = annual_conc + conc
         print("File closed.")
     # Calculate the annual average
-    annual_v /= 12
-    annual_v = annual_v.squeeze()
-    print(x.shape, y.shape, annual_v.shape)
+    annual_conc /= 12
+    annual_conc = annual_conc.squeeze()
+    print(x.shape, y.shape, annual_conc.shape)
     # Plot the annual average data for each face
-    im = ax.pcolormesh(x, y, annual_v, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
 # Read annual comparison data
 compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
                           sheet_name='Annual')
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
+# Adjust SPARTAN observations
+compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
 lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
 print(compar_notna['source'].unique())
 
@@ -1401,20 +1443,11 @@ for i, row in compar_notna.iterrows():
     source = row['source']
     if source == 'SPARTAN':  # Plot SPARTAN data
         marker = markers.get(source, 'o')
-        # Convert from MAC=6 to MAC=10 in HIPS BC
-        row['obs'] = row['obs'] * 0.6
         plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
                     linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
         plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
                     linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
 
-# Calculate the global mean of simulated and observed data
-global_mean_sim = np.nanmean(sim)
-global_mean_obs = np.nanmean(obs)
-global_std_sim = np.nanstd(sim)
-global_std_obs = np.nanstd(obs)
-# Adjust SPARTAN observations
-compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
 # Calculate mean and standard error for SPARTAN sites
 spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
 mean_obs = np.mean(spartan_data['obs'])
@@ -1422,16 +1455,17 @@ std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
 mean_sim = np.mean(spartan_data['sim'])
 std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
 # Add text annotations to the plot
-ax.text(0.3, 0.12, f'Sim = {mean_sim:.2f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.3, 0.05, f'Meas = {mean_obs:.2f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
 # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
 # Create an inset axes for the color bar at the left middle of the plot
 cbar_axes = inset_axes(ax,
                            width='1.5%',
                            height='50%',
-                           bbox_to_anchor=(-0.95, -0.35, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
                            bbox_transform=ax.transAxes,
                            borderpad=0,
                            )
@@ -1443,7 +1477,7 @@ cbar.ax.tick_params(axis='y', labelsize=12)
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'FigS3_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_PWM.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
 
 ################################################################################################

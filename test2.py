@@ -35,181 +35,155 @@ sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/m
 # sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
+support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Create scatter plot for annual data (color blue and red)
+# Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
 ################################################################################################
-# Read the file
-# compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = (6/7) * compr_df['obs']
-compr_df['obs_se'] = (6/7) * compr_df['obs_se']
+# Calculate Population-weighted conc (pwm)
+annual_conc = None
+annual_pop = None
+for mon in range(1, 13):
+    # Load simulated data
+    with xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:
+        conc = sim_df[species].values
+    # Load population data
+    pop_df = xr.open_dataset(support_dir + 'Regrid.PopDen.latlon.1800x3600.to.{}.conserve.2015.nc4'.format(cres.upper())).squeeze()
+    pop = pop_df['pop'].values
 
-# Print the names of each city
-unique_cities = compr_df['city'].unique()
-for city in unique_cities:
-    print(f"City: {city}")
+    conc = conc.flatten()
+    pop = pop.flatten()
 
-# Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 2.4*(6/7)]
-x_range_2 = [2.4*(6/7), compr_df['obs'].max()]
-
-# Define custom blue and red colors
-blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
-red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
-
-# Create custom colormap
-blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
-red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
-
-# Create a custom color palette mapping each city to a color based on observed values
-def map_city_to_color(city, obs):
-    if x_range_1[0] <= obs <= x_range_1[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
-        return blue_cmap(obs_index)
-    elif x_range_2[0] <= obs <= x_range_2[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()) - 1)
-        return red_cmap(obs_index)
+    if annual_conc is None:
+        annual_conc = conc
+        annual_pop = pop
     else:
-        return 'black'
-city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city'], compr_df['obs'])]
+        annual_conc += conc
+annual_conc /= 12
+annual_conc = annual_conc.squeeze()
+# Calculate Population-weighted conc (pwm)
+conc = annual_conc.flatten()
+pop = annual_pop.flatten()
+ind = np.where(~np.isnan(conc))
+N = len(conc[ind])
+pwm = np.nansum(pop[ind] * conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
+pwstd = np.sqrt(np.nansum(pop[ind] * (conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
+pwse = pwstd / np.sqrt(N)
+print(f"Population-weighted mean (pwm): {pwm}")
+print(f"Population-weighted std (pwstd): {pwstd}")
+print(f"Population-weighted se (pwse): {pwse}")
 
-# Sort the cities in the legend based on observed values
-sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
 
-# Classify 'city' based on 'region'
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
-region_mapping = {
-    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
-    'Australia': ['Melbourne'],
-    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
-    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
-    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
-    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
-    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
-}
-region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
-region_markers = {
-    'North America': ['o', 'o', 'o', 'p', 'H', '*'],
-    'Australia': ['o', '^', 's', 'p', 'H', '*'],
-    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Africa': ['o', 'o', 'o', 'o', 'o', 'o'],
-    'South America': ['o', '^', 's', 'p', 'H', '*'],
-}
-# Create an empty list to store the city_marker for each city
-city_marker = []
-city_marker_match = []
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            if region == 'North America':
-                return 'd'
-            elif region == 'Australia':
-                return '*'
-            elif region == 'East Asia':
-                return '^'
-            elif region == 'Central Asia':
-                return 'p'
-            elif region == 'South Asia':
-                return 's'
-            elif region == 'Africa':
-                return 'o'
-            elif region == 'South America':
-                return 'o'
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.03
+bottom = 0.05
+width = 0.94
+height = 0.9
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
+# ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
+
+# Define the colormap
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)]
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+vmax = 4
+
+
+# Accumulate data for each face over the year
+annual_conc = None
+for face in range(6):
+    for mon in range(1, 13):
+        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+        with xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:  # CEDS
+            x = sim_df.corner_lons.isel(nf=face)
+            y = sim_df.corner_lats.isel(nf=face)
+            conc = sim_df[species].isel(nf=face).load()
+            # # Mask out sea areas
+            # land_mask = lsmask < 50  # < 50 represents land
+            # conc = np.where(land_mask, conc, np.nan)
+            # pop = np.where(land_mask, pop, np.nan)
+            if annual_conc is None:
+                annual_conc = conc
             else:
-                return 'o'  # Default marker style
-    print(f"City not found in any region: {city}")
-    return 'o'
-# Iterate over each unique city and map it to a marker
-for city in unique_cities:
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        city_marker.append(marker)
-        city_marker_match.append({'city': city, 'marker': marker})
+                annual_conc = annual_conc + conc
+        print("File closed.")
+    # Calculate the annual average
+    annual_conc /= 12
+    annual_conc = annual_conc.squeeze()
+    print(x.shape, y.shape, annual_conc.shape)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
-sns.set(font='Arial')
-# Add 1:1 line with grey dash
-plt.plot([-0.5, 5.7], [-0.5, 5.7], color='grey', linestyle='--', linewidth=1, zorder=1)
-# # Add error bars
-# for i in range(len(compr_df)):
-#     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
-#                 xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
-#                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
-# Create scatter plot
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+# Adjust SPARTAN observations
+compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
 
-# Customize axis spines
-for spine in ax.spines.values():
-    spine.set_edgecolor('black')
-    spine.set_linewidth(1)
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Measurement
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
 
-# Customize legend markers
-handles, labels = scatterplot.get_legend_handles_labels()
-sorted_handles = [handles[list(labels).index(city)] for city in sorted_cities]
-border_width = 1
-# Customize legend order
-legend = plt.legend(handles=sorted_handles, labels=sorted_cities, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12, markerscale=1.25)
-legend.get_frame().set_edgecolor('black')
+# Calculate mean and standard error for SPARTAN sites
+spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+mean_obs = np.mean(spartan_data['obs'])
+std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+mean_sim = np.mean(spartan_data['sim'])
+std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# Add text annotations to the plot
+ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-# Set title, xlim, ylim, ticks, labels
-# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 10])
-plt.ylim([-0.5, 10])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+# Create an inset axes for the color bar at the left middle of the plot
+cbar_axes = inset_axes(ax,
+                           width='1.5%',
+                           height='50%',
+                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=12)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
 
-# Perform linear regression for the first segment
-mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
-slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
-# Perform linear regression for the second segment
-mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
-# Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
-            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-
-# Add text with linear regression equations and other statistics
-intercept_display_1 = abs(intercept_1)
-intercept_display_2 = abs(intercept_2)
-intercept_sign_1 = '-' if intercept_1 < 0 else '+'
-intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.6, 0.61, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='red')
-# Add the number of data points for each segment
-num_points_1 = mask_1.sum()
-plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-num_points_2 = mask_2.sum()
-plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
-
-# plt.text(0.05, 0.76, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
-#          transform=scatterplot.transAxes, fontsize=18, color='blue')
-# plt.text(0.05, 0.51, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
-#          transform=scatterplot.transAxes, fontsize=18, color='red')
-# num_points_1 = mask_1.sum()
-# plt.text(0.05, 0.70, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-# num_points_2 = mask_2.sum()
-# plt.text(0.05, 0.45, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
-
-# Set labels
-plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-
-# Show the plot
-plt.tight_layout()
-plt.savefig(out_dir + 'FigS2_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC7_HIPS.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_PWM.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
