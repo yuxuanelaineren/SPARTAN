@@ -589,7 +589,7 @@ plt.show()
 ################################################################################################
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 compr_df['obs'] = 0.6 * compr_df['obs']
 compr_df['obs_se'] = 0.6 * compr_df['obs_se']
 
