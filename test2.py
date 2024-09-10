@@ -20,170 +20,165 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
-
-cres = 'C360'
-year = 2019
-species = 'BC'
-inventory = 'CEDS'
-deposition = 'noLUO'
+from scipy.io import loadmat
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
-# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/AMS/supportData/'
 ################################################################################################
-# Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
+# Extract XRF Sulfur and IC Sulfate from masterfile and lon/lat from site.details
 ################################################################################################
-# Calculate Population-weighted conc (pwm)
-annual_conc = None
-annual_pop = None
-for mon in range(1, 13):
-    # Load simulated data
-    with xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:
-        conc = sim_df[species].values
-    # Load population data
-    pop_df = xr.open_dataset(support_dir + 'Regrid.PopDen.latlon.1800x3600.to.{}.conserve.2015.nc4'.format(cres.upper())).squeeze()
-    pop = pop_df['pop'].values
-
-    conc = conc.flatten()
-    pop = pop.flatten()
-
-    if annual_conc is None:
-        annual_conc = conc
-        annual_pop = pop
-    else:
-        annual_conc += conc
-annual_conc /= 12
-annual_conc = annual_conc.squeeze()
-# Calculate Population-weighted conc (pwm)
-conc = annual_conc.flatten()
-pop = annual_pop.flatten()
-ind = np.where(~np.isnan(conc))
-N = len(conc[ind])
-pwm = np.nansum(pop[ind] * conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
-pwstd = np.sqrt(np.nansum(pop[ind] * (conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
-pwse = pwstd / np.sqrt(N)
-print(f"Population-weighted mean (pwm): {pwm}")
-print(f"Population-weighted std (pwstd): {pwstd}")
-print(f"Population-weighted se (pwse): {pwse}")
-
-
-# Map SPARTAN and GCHP data for the entire year
-plt.style.use('default')
-plt.figure(figsize=(10, 5))
-left = 0.03
-bottom = 0.05
-width = 0.94
-height = 0.9
-ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
-ax.coastlines(color=(0.4, 0.4, 0.4))
-ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
-ax.set_global()
-ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
-# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
-# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
-# ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
-# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
-# ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
-
-# Define the colormap
-colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)]
-cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
-vmax = 4
-
-
-# Accumulate data for each face over the year
-annual_conc = None
-for face in range(6):
-    for mon in range(1, 13):
-        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
-        with xr.open_dataset(
-            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:  # CEDS
-            x = sim_df.corner_lons.isel(nf=face)
-            y = sim_df.corner_lats.isel(nf=face)
-            conc = sim_df[species].isel(nf=face).load()
-            # # Mask out sea areas
-            # land_mask = lsmask < 50  # < 50 represents land
-            # conc = np.where(land_mask, conc, np.nan)
-            # pop = np.where(land_mask, pop, np.nan)
-            if annual_conc is None:
-                annual_conc = conc
+# Function to read and preprocess data from master files
+def read_master_files(obs_dir):
+    excluded_filters = [
+        'AEAZ-0078', 'AEAZ-0086', 'AEAZ-0089', 'AEAZ-0090', 'AEAZ-0093', 'AEAZ-0097',
+        'AEAZ-0106', 'AEAZ-0114', 'AEAZ-0115', 'AEAZ-0116', 'AEAZ-0141', 'AEAZ-0142',
+        'BDDU-0346', 'BDDU-0347', 'BDDU-0349', 'BDDU-0350',
+        'MXMC-0006', 'NGIL-0309'
+    ]
+    IC_dfs = []
+    for filename in os.listdir(obs_dir):
+        if filename.endswith('.csv'):
+            master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
+            IC_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
+                            'S_XRF_ng', 'IC_SO4_ug', 'Flags']
+            if all(col in master_data.columns for col in IC_columns):
+                # Select the specified columns
+                master_data.columns = master_data.columns.str.strip()
+                IC_df = master_data[IC_columns].copy()
+                # Exclude specific FilterID values
+                IC_df = IC_df[~IC_df['FilterID'].isin(excluded_filters)]
+                # Select PM2.5
+                IC_df['Mass_type'] = pd.to_numeric(IC_df['Mass_type'], errors='coerce')
+                IC_df = IC_df.loc[IC_df['Mass_type'] == 1]
+                # Convert the relevant columns to numeric
+                IC_df[['S_XRF_ng', 'IC_SO4_ug', 'mass_ug', 'Volume_m3', 'start_year']] = IC_df[
+                    ['S_XRF_ng', 'IC_SO4_ug', 'mass_ug', 'Volume_m3', 'start_year']].apply(pd.to_numeric, errors='coerce')
+                # Select year 2019 - 2023
+                # IC_df = IC_df[IC_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
+                # Drop rows with NaN values
+                IC_df = IC_df.dropna(subset=['start_year', 'Volume_m3', 'S_XRF_ng', 'IC_SO4_ug'])
+                IC_df = IC_df[IC_df['Volume_m3'] > 0]
+                IC_df = IC_df[IC_df['S_XRF_ng'] > 0]
+                IC_df = IC_df[IC_df['IC_SO4_ug'] > 0]
+                # Calculate BC concentrations, fractions, and BC/Sulfate
+                IC_df['S_XRF_(ug/m3)'] = IC_df['S_XRF_ng'] / (IC_df['Volume_m3'] * 1000)
+                IC_df['IC_SO4_(ug/m3)'] = IC_df['IC_SO4_ug'] / IC_df['Volume_m3']
+                IC_df['PM25'] = IC_df['mass_ug'] / IC_df['Volume_m3']
+                # Extract the site name and add as a column
+                site_name = filename.split('_')[0]
+                IC_df["Site"] = [site_name] * len(IC_df)
+                # Append the current HIPS_df to the list
+                IC_dfs.append(IC_df)
             else:
-                annual_conc = annual_conc + conc
-        print("File closed.")
-    # Calculate the annual average
-    annual_conc /= 12
-    annual_conc = annual_conc.squeeze()
-    print(x.shape, y.shape, annual_conc.shape)
-    # Plot the annual average data for each face
-    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
+                print(f"Skipping {filename} because not all required columns are present.")
+    return pd.concat(IC_dfs, ignore_index=True)
 
-# Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
-                          sheet_name='Annual')
-compar_notna = compar_df[compar_df.notna().all(axis=1)]
-# Adjust SPARTAN observations
-compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
-lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
-print(compar_notna['source'].unique())
+# Main script
+if __name__ == "__main__":
+    # Read data
+    IC_df = read_master_files(obs_dir)
+    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
+    obs_df = pd.merge(IC_df, site_df, how="left", left_on="Site", right_on="Site_Code").drop("Site_Code", axis=1)
 
-# Define marker sizes
-s1 = [40] * len(obs)  # inner circle: Measurement
-s2 = [120] * len(obs)  # outer ring: Simulation
-markers = {'SPARTAN': 'o', 'other': 's'}
-# Create scatter plot for other data points (squares)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source != 'SPARTAN':  # Exclude SPARTAN data for now
-        marker = markers.get(source, 'o')
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
-# Create scatter plot for SPARTAN data points (circles)
-for i, row in compar_notna.iterrows():
-    source = row['source']
-    if source == 'SPARTAN':  # Plot SPARTAN data
-        marker = markers.get(source, 'o')
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
-        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
-                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+    # Write HIPS data to Excel
+    with pd.ExcelWriter(os.path.join(out_dir, "SO4_IC_XRF_SPARTAN.xlsx"), engine='openpyxl', mode='w') as writer:
+        obs_df.to_excel(writer, sheet_name='All', index=False)
 
-# Calculate mean and standard error for SPARTAN sites
-spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
-mean_obs = np.mean(spartan_data['obs'])
-std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
-mean_sim = np.mean(spartan_data['sim'])
-std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
-# Add text annotations to the plot
-ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
-# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
+    # Writ summary statistics to Excel
+    site_counts = obs_df.groupby('Site')['FilterID'].count()
+    for site, count in site_counts.items():
+        print(f"{site}: {count} rows")
+    summary_df = obs_df.groupby(['Country', 'City'])['IC_SO4_(ug/m3)'].agg(['count', 'mean', 'median', 'std'])
+    summary_df['stderr'] = summary_df['std'] / np.sqrt(summary_df['count']).pow(0.5)
+    summary_df.rename(columns={'count': 'num_obs', 'mean': 'bc_mean', 'median': 'bc_median', 'std': 'bc_stdv', 'stderr': 'bc_stderr'},
+        inplace=True)
+    with pd.ExcelWriter(os.path.join(out_dir, "SO4_IC_XRF_SPARTAN.xlsx"), engine='openpyxl', mode='a') as writer:
+        summary_df.to_excel(writer, sheet_name='Summary', index=True)
+################################################################################################
+# plot XRF S vs IC SO4, color cell by no. of pairs
+################################################################################################
+# Read the file
+merged_df = pd.read_excel(os.path.join(out_dir, 'SO4_IC_XRF_SPARTAN.xlsx'))
+# Rename to simplify coding
+merged_df.rename(columns={"S_XRF_(ug/m3)": "XRF"}, inplace=True)
+merged_df.rename(columns={"IC_SO4_(ug/m3)": "IC"}, inplace=True)
+merged_df.rename(columns={"City": "city"}, inplace=True)
 
-# Create an inset axes for the color bar at the left middle of the plot
-cbar_axes = inset_axes(ax,
-                           width='1.5%',
-                           height='50%',
-                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
-                           bbox_transform=ax.transAxes,
-                           borderpad=0,
-                           )
-cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
-font_properties = font_manager.FontProperties(family='Arial', size=12)
-cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
-cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-cbar.ax.tick_params(axis='y', labelsize=12)
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(7, 6))
+
+# Create a 2D histogram to divide the area into squares and count data points in each square
+hist, xedges, yedges = np.histogram2d(merged_df['XRF'], merged_df['IC'], bins=300)
+
+# Determine the color for each square based on the number of pairs
+colors = np.zeros_like(hist)
+for i in range(len(hist)):
+    for j in range(len(hist[i])):
+        pairs = hist[i][j]
+        colors[i][j] = pairs
+
+# Define the custom color scheme gradient
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
+
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+
+
+# Plot the 2D histogram with the specified color scheme
+sns.set(font='Arial')
+scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
+
+# Display the original data points as a scatter plot
+# plt.scatter(merged_df['XRF'], merged_df['IC'], color='black', s=2, alpha=0.5)
+
+# Set title, xlim, ylim, ticks, labels
+plt.xlim([merged_df['IC'].min()-0.15, 10])
+plt.ylim([merged_df['IC'].min()-0.1, 10])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+ax.tick_params(axis='x', direction='out', width=1, length=5)
+ax.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with grey dash
+x = merged_df['IC']
+y = merged_df['IC']
+plt.plot([merged_df['IC'].min(), merged_df['IC'].max()], [3*merged_df['IC'].min(), 3*merged_df['IC'].max()], color='grey', linestyle='--', linewidth=1)
+
+# Add number of data points to the plot
+num_points = len(merged_df)
+plt.text(0.6, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
+
+# Perform linear regression with NaN handling
+mask = ~np.isnan(merged_df['XRF']) & ~np.isnan(merged_df['IC'])
+slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['XRF'][mask], merged_df['IC'][mask])
+# Check for NaN in results
+if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
+    print("Linear regression results contain NaN values. Check the input data.")
+else:
+    # Add linear regression line and text
+    # sns.regplot(x='XRF', y='IC', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
+    # Change the sign of the intercept for display
+    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
+    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
+
+    # Update the text line with the adjusted intercept
+    plt.text(0.6, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+             transform=plt.gca().transAxes, fontsize=18)
+
+plt.xlabel('XRF Sulfur (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('IC Sulfate (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Create the colorbar and specify font properties
+cbar_ax = fig.add_axes([0.65, 0.2, 0.02, 0.4])
+cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
+cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
+cbar.set_ticks([0, 10, 20, 30, 40], fontname='Arial', fontsize=14)
 
-# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_PWM.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# show the plot
+plt.tight_layout()
+plt.savefig(os.path.join(out_dir, "Sulfate_Comparison_IC_XRF.svg"), format="SVG", dpi=300)
 plt.show()
