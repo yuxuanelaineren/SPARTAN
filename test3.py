@@ -40,110 +40,180 @@ site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Map CEDS emissions in Beijing site
+# Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
 ################################################################################################
-# Path to the NetCDF file
-CEDS_dir = '/Volumes/rvmartin/Active/GEOS-Chem-shared/ExtData/HEMCO/CEDS/v2024-06/2019/CEDS_BC_0.1x0.1_2019.nc'
-CEDS_df = xr.open_dataset(CEDS_dir)
-# print(CEDS_df)
+# Calculate Population-weighted conc (pwm)
+annual_conc = None
+annual_pop = None
+for mon in range(1, 13):
+    # Load simulated data
+    with xr.open_dataset(sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:
+        conc = sim_df[species].values
+    # Load population data
+    pop_df = xr.open_dataset(support_dir + 'Regrid.PopDen.latlon.1800x3600.to.{}.conserve.2015.nc4'.format(cres.upper())).squeeze()
+    pop = pop_df['pop'].values
 
-# Extract emissions data and average over time
-emission_data = {key: CEDS_df[key].mean(dim='time') for key in
-                 ['BC_agr', 'BC_ene', 'BC_ind', 'BC_rco', 'BC_shp', 'BC_slv', 'BC_tra', 'BC_wst']}
-lat = CEDS_df['lat']
-lon = CEDS_df['lon']
+    # # Mask out sea areas
+    # lsmask_df = xr.open_dataset(support_dir + 'Regrid.LL.1800x3600.{}.neareststod.landseamask.nc'.format(cres.upper())).squeeze()
+    # lsmask = lsmask_df['mask'].values
+    # land_mask = lsmask < 50  # < 50 represents land
+    # conc = np.where(land_mask, conc, np.nan)
+    # pop = np.where(land_mask, pop, np.nan)
 
-def plot_emissions(data, title, key, vmin=0, vmax=5e-11):
-    """Plot emissions data on a Cartopy map with a circle for Beijing site."""
-    plt.style.use('default')
-    fig, ax = plt.subplots(figsize=(7, 5), subplot_kw={'projection': ccrs.PlateCarree()})
-    ax.coastlines(color=(0.4, 0.4, 0.4))
-    ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
-    ax.add_feature(cfeature.LAND, edgecolor='black')
-    ax.set_extent([115, 118, 39.3, 41.3], crs=ccrs.PlateCarree())  # Focus on Beijing
+    conc = conc.flatten()
+    pop = pop.flatten()
 
-    # Define the colormap
-    colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)]
-    cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+    if annual_conc is None:
+        annual_conc = conc
+        annual_pop = pop
+    else:
+        annual_conc += conc
+annual_conc /= 12
+annual_conc = annual_conc.squeeze()
+# Calculate Population-weighted conc (pwm)
+conc = annual_conc.flatten()
+pop = annual_pop.flatten()
+ind = np.where(~np.isnan(conc))
+N = len(conc[ind])
+pwm = np.nansum(pop[ind] * conc[ind]) / np.nansum(pop[ind]) # compute pwm, one value
+pwstd = np.sqrt(np.nansum(pop[ind] * (conc[ind] - pwm) ** 2) / ((N - 1) / N * np.nansum(pop[ind])))
+pwse = pwstd / np.sqrt(N)
+print(f"Population-weighted mean (pwm): {pwm}")
+print(f"Population-weighted std (pwstd): {pwstd}")
+print(f"Population-weighted se (pwse): {pwse}")
+# Compute global (arithmetic) mean, standard deviation, and standard error
+global_mean = np.nanmean(conc)
+global_std = np.nanstd(conc, ddof=1)  # ddof=1 for sample standard deviation
+global_se = global_std / np.sqrt(N)
+print(f"Global mean: {global_mean}")
+print(f"Global standard deviation: {global_std}")
+print(f"Global standard error: {global_se}")
 
-    im = ax.pcolormesh(lon, lat, data, cmap=cmap, transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax)
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.03
+bottom = 0.05
+width = 0.94
+height = 0.9
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
+# ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
 
-    # Add colorbar
-    cbar_axes = inset_axes(ax, width='50%', height='3%', bbox_to_anchor=(-0.25, -1.05, 1, 1),
-                           bbox_transform=ax.transAxes, borderpad=0)
-    cbar = plt.colorbar(im, cax=cbar_axes, orientation='horizontal')
-    font_properties = font_manager.FontProperties(family='Arial', size=12)
-    cbar.set_ticks([0, 1e-11, 2e-11, 3e-11, 4e-11, 5e-11], fontproperties=font_properties)
-    cbar.ax.set_title('')
-    cbar.ax.title.set_visible(False)
-    cbar.ax.set_xlabel('')
-    cbar.ax.set_xlabel('BC Emissions (kg/m$^2$/s)', labelpad=2, fontproperties=font_properties)
-    cbar.ax.xaxis.set_label_position('bottom')  # Ensure label is at the bottom
-    cbar.ax.tick_params(axis='x', labelsize=12)
-    cbar.outline.set_edgecolor('black')
-    cbar.outline.set_linewidth(1)
+# Define the colormap
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)] # white-blure-green-yellow-orange-red
+# colors = [(0, 0, 0.6), (0, 0, 1),(0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9), (0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)] # dark blue to light blue to light red to dark red
 
-    # Add circle for SPARTAN Beijing site
-    site_lat, site_lon = 40.004, 116.326
-    circle = patches.Circle((site_lon, site_lat), radius=0.015, edgecolor='black', facecolor='none',
-                            transform=ccrs.PlateCarree())
-    # Add Beijing city border
-    beijing_shapefile = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/Beijing_border_2020/Beijing-2020.shp'
-    gdf = gpd.read_file(beijing_shapefile)
-    gdf = gdf.to_crs(crs=ccrs.PlateCarree().proj4_init)  # Convert CRS to match map
-    ax.add_geometries(gdf.geometry, ccrs.PlateCarree(), edgecolor='black', facecolor='none', linewidth=1)
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+vmax = 4
 
-    ax.add_patch(circle)
-    plt.suptitle(f'{title}', fontsize=14, fontproperties=font_manager.FontProperties(family='Arial'), y=0.95)
-    plt.subplots_adjust(top=0.95)  # Adjust the top margin to move the plot up
+# Accumulate data for each face over the year
+annual_conc = None
+for face in range(6):
+    for mon in range(1, 13):
+        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+        with xr.open_dataset(
+            sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon), engine='netcdf4') as sim_df:  # CEDS
+            x = sim_df.corner_lons.isel(nf=face)
+            y = sim_df.corner_lats.isel(nf=face)
+            conc = sim_df[species].isel(nf=face).load()
+            if annual_conc is None:
+                annual_conc = conc
+            else:
+                annual_conc = annual_conc + conc
+        print("File closed.")
+    # Calculate the annual average
+    annual_conc /= 12
+    annual_conc = annual_conc.squeeze()
+    print(x.shape, y.shape, annual_conc.shape)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-    filename = f'FigSX_Beijing_CEDS0.1v2024-06_{key}.tiff'
-    plt.savefig(out_dir + filename, dpi=600, bbox_inches='tight')
-    plt.show()
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+# Adjust SPARTAN observations
+compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
 
-def extract_emission_at_site(data, lat, lon, site_lat, site_lon):
-    """Extract BC emissions data at a specific site location."""
-    # Convert xarray DataArrays to NumPy arrays
-    lat_np = lat.values.flatten()  # Ensure it's a 1D array
-    lon_np = lon.values.flatten()  # Ensure it's a 1D array
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Measurement
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
 
-    # Find the closest latitude and longitude index
-    lat_idx = np.argmin(np.abs(lat_np - site_lat))
-    lon_idx = np.argmin(np.abs(lon_np - site_lon))
+# Calculate mean and standard error for SPARTAN sites
+spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+spartan_developed_data = spartan_data[spartan_data['marker'] != 'Global South']
+spartan_gs_data = spartan_data[spartan_data['marker'] == 'Global South']
+other_data = compar_notna[compar_notna['source'] == 'other']
+mean_obs = np.mean(spartan_data['obs'])
+std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+mean_sim = np.mean(spartan_data['sim'])
+std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# Calculate NMD and NMB for SPARTAN sites
+NMD_spartan = np.sum(np.abs(spartan_data['sim'] - spartan_data['obs'])) / np.sum(spartan_data['obs'])
+NMB_spartan = np.sum(spartan_data['sim'] - spartan_data['obs']) / np.sum(spartan_data['obs'])
+NMD_spartan_developed = np.sum(np.abs(spartan_developed_data['sim'] - spartan_developed_data['obs'])) / np.sum(spartan_developed_data['obs'])
+NMD_spartan_gs = np.sum(np.abs(spartan_gs_data['sim'] - spartan_gs_data['obs'])) / np.sum(spartan_gs_data['obs'])
+NMD_other = np.sum(np.abs(other_data['sim'] - other_data['obs'])) / np.sum(other_data['obs'])
+NMB_other = np.sum(other_data['sim'] - other_data['obs']) / np.sum(other_data['obs'])
+# Print the final values
+print(f"Normalized Mean Difference at SPARTAN sites (NMD_spartan): {NMD_spartan:.4f}")
+print(f"Normalized Mean Bias at SPARTAN sites (NMB_spartan): {NMB_spartan:.4f}")
+print(f"Normalized Mean Difference at SPARTAN sites in developed regions (NMD_sparta_developed): {NMD_spartan_developed:.4f}")
+print(f"Normalized Mean Difference at SPARTAN sites in Global South (NMB_spartan_gs): {NMD_spartan_gs:.4f}")
+print(f"Normalized Mean Difference at other sites (NMD_other): {NMD_other:.4f}")
+print(f"Normalized Mean Bias at other sites (NMB_other): {NMB_other:.4f}")
+# Add text annotations to the plot
+ax.text(0.3, 0.04, f'NMD across SPARTAN sites = {NMD_spartan * 100:.0f}%', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-    # Check the dimensions
-    print(f'Latitude Index: {lat_idx}, Longitude Index: {lon_idx}')
+# Create an inset axes for the color bar at the left middle of the plot
+cbar_axes = inset_axes(ax,
+                           width='1.5%',
+                           height='50%',
+                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=12)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
 
-    # Print the emissions data at the site
-    for key in data:
-        # Extract the emission value at the site
-        emission_value = data[key].isel(lat=lat_idx, lon=lon_idx).values
-        print(f'{key} emissions at ({site_lat}, {site_lon}): {emission_value} kg/m$^2$/s')
-
-
-extract_emission_at_site(emission_data, lat, lon, 40.004, 116.326)
-
-# # Define titles for each emission category
-# emission_titles = {
-#     'BC_ind': 'CEDS 0.1 BC Industrial Emissions',
-#     'BC_rco': 'CEDS 0.1 BC Residential, Commercial, Other Combustion Emissions',
-#     'BC_tra': 'CEDS 0.1 BC Transportation Emissions',
-#     'BC_shp': 'CEDS 0.1 BC International Shipping Emissions',
-#     'BC_slv': 'CEDS 0.1 BC Solvents production and application',
-#     'BC_wst': 'CEDS 0.1 BC Waste Emissions',
-#     'BC_agr': 'CEDS 0.1 BC Agriculture Emissions',
-#     'BC_ene': 'CEDS 0.1 BC Energy Emissions'
-# }
-#
-# # Plot each category with the appropriate title
-# for key, title in emission_titles.items():
-#     if key in emission_data:
-#         plot_emissions(emission_data[key], title)
-#
-# Plot each category
-plot_emissions(emission_data['BC_ind'], 'CEDS0.1 BC Industrial Emissions', 'BC_ind')
-plot_emissions(emission_data['BC_rco'], 'CEDS0.1 BC Residential, Commercial, Other Combustion Emissions', 'BC_rco')
-plot_emissions(emission_data['BC_tra'], 'CEDS0.1 BC Transportation Emissions', 'BC_tra')
-
-
-
+# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_NMD.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.show()
