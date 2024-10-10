@@ -40,13 +40,13 @@ site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Create scatter plot for annual data (color blue and red) with one line
+# Create scatter plot for annual data (color blue and red)
 ################################################################################################
 # Read the file
 # compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Mon')
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = (6/20) * compr_df['obs']
-# compr_df['obs_se'] = 0.6 * compr_df['obs_se']
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df['obs'] = (6/13) * compr_df['obs']
+compr_df['obs_se'] = (6/13) * compr_df['obs_se']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -54,14 +54,13 @@ for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), (6/20) * 2.4]
-x_range_2 = [(6/20) * 2.4, compr_df['obs'].max()]
-x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 2.4*(6/13)] # 0.6 for MAC=10m2/g, 6/7 for MAC=7m2/g, 6/13 for MAC=13m2/g,
+x_range_2 = [2.4*(6/13), compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
 red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
-
+# blue_colors = [(0, 0, 0.6), (0, 0, 1),(0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)] # dark to light
 # Create custom colormap
 blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
 red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
@@ -144,7 +143,7 @@ for city in unique_cities:
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
 # Add 1:1 line with grey dash
-plt.plot([-0.5, 6.8], [-0.5, 6.8], color='grey', linestyle='--', linewidth=1, zorder=1) #5.6
+plt.plot([-0.5, 5.8], [-0.5, 5.8], color='grey', linestyle='--', linewidth=1, zorder=1)
 # # Add error bars
 # for i in range(len(compr_df)):
 #     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
@@ -168,29 +167,46 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12])
-plt.ylim([-0.5, 12])
-plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
-plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.xlim([-0.5, 10])
+plt.ylim([-0.5, 10])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
-# Perform linear regression for all segments
-mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
-slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['obs'][mask], compr_df['sim'][mask])
+# Perform linear regression for the first segment
+mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
+slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
+# Perform linear regression for the second segment
+mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
+slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
 # Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask],
-            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-# Add text with linear regression equations and other statistics
-intercept_display = abs(intercept)
-intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='black')
+sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
+            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
 
+# Add text with linear regression equations and other statistics
+intercept_display_1 = abs(intercept_1)
+intercept_display_2 = abs(intercept_2)
+intercept_sign_1 = '-' if intercept_1 < 0 else '+'
+intercept_sign_2 = '-' if intercept_2 < 0 else '+'
+plt.text(0.6, 0.83, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='blue')
+plt.text(0.6, 0.61, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='red')
 # Add the number of data points for each segment
-num_points = mask.sum()
-plt.text(0.6, 0.77, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-plt.text(0.65, 0.05, f'EDGAR, {year}', transform=scatterplot.transAxes, fontsize=18) # 0.7 for HTAP
+num_points_1 = mask_1.sum()
+plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+num_points_2 = mask_2.sum()
+plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+
+# plt.text(0.05, 0.76, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+#          transform=scatterplot.transAxes, fontsize=18, color='blue')
+# plt.text(0.05, 0.51, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+#          transform=scatterplot.transAxes, fontsize=18, color='red')
+# num_points_1 = mask_1.sum()
+# plt.text(0.05, 0.70, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+# num_points_2 = mask_2.sum()
+# plt.text(0.05, 0.45, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
 # Set labels
 plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -198,5 +214,5 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS3_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig(out_dir + 'FigS5b_Scatter_{}_{}_{}_Sim_vs_SPARTAN_{}_{:02d}_AnnualMean_MAC13_HIPS.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()

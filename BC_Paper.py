@@ -21,6 +21,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 from scipy.io import loadmat
+import matplotlib.lines as mlines
 
 cres = 'C360'
 year = 2019
@@ -681,7 +682,7 @@ for city in unique_cities:
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
 # Add 1:1 line with grey dash
-plt.plot([-0.5, 12], [-0.5, 12], color='grey', linestyle='--', linewidth=1, zorder=1)
+plt.plot([-0.5, 5.8], [-0.5, 5.8], color='grey', linestyle='--', linewidth=1, zorder=1)
 # # Add error bars
 # for i in range(len(compr_df)):
 #     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
@@ -705,10 +706,10 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12])
-plt.ylim([-0.5, 12])
-plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
-plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.xlim([-0.5, 10])
+plt.ylim([-0.5, 10])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -1345,10 +1346,10 @@ cbar.outline.set_linewidth(1)
 # plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_NMD.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
 ################################################################################################
-# Other: Create scatter plot, all black
+# Other: Create scatter plot Sims vs Meas at SPARTAN and other sites, color by region
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.josin(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 # Convert from MAC=6 to MAC=10 in HIPS BC
 compr_df.loc[compr_df['source'] == 'SPARTAN', 'obs'] *= 0.6
 # compr_df = compr_df[compr_df['country'].isin(['US', 'Canada'])] # 'Europe', 'US', 'Canada'
@@ -1362,15 +1363,25 @@ compr_df.loc[compr_df['source'] == 'SPARTAN', 'obs'] *= 0.6
 x_range_1 = [0, 1.4]
 x_range_2 = [1.4, 11]
 x_range = [0, 11]
+# # Assign colors based on the x-range
+# def assign_color(value):
+#     if x_range_1[0] <= value <= x_range_1[1]:
+#         return 'blue'
+#     elif x_range_2[0] < value <= x_range_2[1]:
+#         return 'red'
+#     return 'black'
+# compr_df['color'] = compr_df['obs'].apply(assign_color)
 
-# Assign colors based on the x-range
-def assign_color(value):
-    if x_range_1[0] <= value <= x_range_1[1]:
-        return 'blue'
-    elif x_range_2[0] < value <= x_range_2[1]:
+# Assign colors based on the 'region' column
+def assign_color(region_value):
+    if region_value == 'Global South':
         return 'red'
-    return 'black'
-compr_df['color'] = compr_df['obs'].apply(assign_color)
+    else:
+        return 'blue'
+compr_df['color'] = compr_df['region'].apply(assign_color)
+# Print the unique contents of the 'region' column
+unique_regions = compr_df['region'].unique()
+print("Unique regions in the dataset:", unique_regions)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(7, 6))
@@ -1417,7 +1428,7 @@ plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', font
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Create a custom legend for the source only
-import matplotlib.lines as mlines
+
 spartan_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='o', linestyle='None', markersize=8, label='SPARTAN')
 other_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='s', linestyle='None', markersize=8, label='other Meas')
 legend = plt.legend(handles=[spartan_legend, other_legend], fontsize=12, frameon=False, loc=(0.75, 0.05))
@@ -1427,7 +1438,7 @@ legend.get_frame().set_facecolor('white') # Disable Legend
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS4_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean_MAC10.svg'.format(cres, inventory, deposition, species), dpi=300)
+# plt.savefig(out_dir + 'FigS6_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean_MAC10_ColorByRegion.svg'.format(cres, inventory, deposition, species), dpi=300)
 
 plt.show()
 ################################################################################################
