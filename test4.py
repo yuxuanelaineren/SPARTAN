@@ -20,8 +20,9 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
-import matplotlib.patches as patches
+from scipy.io import loadmat
 import matplotlib.lines as mlines
+
 cres = 'C360'
 year = 2019
 species = 'BC'
@@ -36,101 +37,215 @@ sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/m
 # sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 ################################################################################################
-# Other: Create scatter plot, all black
+# Extract BC_HIPS from masterfile and lon/lat from site.details
 ################################################################################################
-# Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-# Convert from MAC=6 to MAC=10 in HIPS BC
-compr_df.loc[compr_df['source'] == 'SPARTAN', 'obs'] *= 0.6
-# compr_df = compr_df[compr_df['country'].isin(['US', 'Canada'])] # 'Europe', 'US', 'Canada'
+# Function to read and preprocess data from master files
+def read_master_files(obs_dir):
+    excluded_filters = [
+        'AEAZ-0078', 'AEAZ-0086', 'AEAZ-0089', 'AEAZ-0090', 'AEAZ-0093', 'AEAZ-0097',
+        'AEAZ-0106', 'AEAZ-0114', 'AEAZ-0115', 'AEAZ-0116', 'AEAZ-0141', 'AEAZ-0142',
+        'BDDU-0346', 'BDDU-0347', 'BDDU-0349', 'BDDU-0350', 'MXMC-0006', 'NGIL-0309'
+    ]
+    HIPS_FTIR_dfs = []
+    for filename in os.listdir(obs_dir):
+        if filename.endswith('.csv'):
+            master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
+            HIPS_FTIR_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
+                            'BC_HIPS_ug', 'EC_FTIR_ug', 'Flags']
+            if all(col in master_data.columns for col in HIPS_FTIR_columns):
+                # Select the specified columns
+                master_data.columns = master_data.columns.str.strip()
+                HIPS_FTIR_df = master_data[HIPS_FTIR_columns].copy()
+                # Exclude specific FilterID values
+                HIPS_FTIR_df = HIPS_FTIR_df[~HIPS_FTIR_df['FilterID'].isin(excluded_filters)]
+                # Select PM2.5
+                HIPS_FTIR_df['Mass_type'] = pd.to_numeric(HIPS_FTIR_df['Mass_type'], errors='coerce')
+                HIPS_FTIR_df = HIPS_FTIR_df.loc[HIPS_FTIR_df['Mass_type'] == 1]
+                # Convert the relevant columns to numeric
+                HIPS_FTIR_df[['BC_HIPS_ug', 'EC_FTIR_ug', 'mass_ug', 'Volume_m3', 'start_year', 'start_month', 'start_day']] = HIPS_FTIR_df[
+                    ['BC_HIPS_ug', 'EC_FTIR_ug', 'mass_ug', 'Volume_m3', 'start_year', 'start_month', 'start_day']].apply(pd.to_numeric, errors='coerce')
+                # Select year 2019 - 2023
+                # HIPS_df = HIPS_df[HIPS_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
+                # Drop rows with NaN values
+                HIPS_FTIR_df = HIPS_FTIR_df.dropna(subset=['start_year', 'Volume_m3'])
+                HIPS_FTIR_df = HIPS_FTIR_df[HIPS_FTIR_df['Volume_m3'] > 0]
+                # HIPS_df = HIPS_df[HIPS_df['BC_HIPS_ug'] > 0]
+                # Calculate BC concentrations
+                HIPS_FTIR_df['BC_HIPS_ug/m3'] = HIPS_FTIR_df['BC_HIPS_ug'] / HIPS_FTIR_df['Volume_m3']
+                HIPS_FTIR_df['EC_FTIR_ug/m3'] = HIPS_FTIR_df['EC_FTIR_ug'] / HIPS_FTIR_df['Volume_m3']
+                HIPS_FTIR_df['PM25_ug/m3'] = HIPS_FTIR_df['mass_ug'] / HIPS_FTIR_df['Volume_m3']
+                # Extract the site name and add as a column
+                site_name = filename.split('_')[0]
+                HIPS_FTIR_df["Site"] = [site_name] * len(HIPS_FTIR_df)
+                # Append the current HIPS_df to the list
+                HIPS_FTIR_dfs.append(HIPS_FTIR_df)
+            else:
+                print(f"Skipping {filename} because not all required columns are present.")
+    return pd.concat(HIPS_FTIR_dfs, ignore_index=True)
 
-# # Print the names of each city
-# unique_cities = compr_df['city'].unique()
-# for city in unique_cities:
-#     print(f"City: {city}")
+# Function to read and preprocess UV-Vis data
+def read_UV_Vis_files(out_dir):
+    UV_df = pd.read_excel(os.path.join(out_dir, 'BC_UV-Vis_SPARTAN/BC_UV-Vis_SPARTAN_Joshin_20230510.xlsx'),
+                          usecols=['Filter ID', 'f_BC', 'Location ID'])
+    # Drop the last two digits in the 'Filter ID' column: 'AEAZ-0113-1' to 'AEAZ-0113'
+    UV_df['FilterID'] = UV_df['Filter ID'].str[:-2]
+    UV_df.rename(columns={'Location ID': 'Site'}, inplace=True)
+    # Convert columns to numeric
+    UV_df['f_BC'] = pd.to_numeric(UV_df['f_BC'], errors='coerce')
+    # Exclude values where f_BC > 1
+    UV_df = UV_df[UV_df['f_BC'] <= 0.8]
+    return UV_df
 
-# Define the range of x-values for the two segments
-x_range_1 = [0, 1.4]
-x_range_2 = [1.4, 11]
-x_range = [0, 11]
-# # Assign colors based on the x-range
-# def assign_color(value):
-#     if x_range_1[0] <= value <= x_range_1[1]:
-#         return 'blue'
-#     elif x_range_2[0] < value <= x_range_2[1]:
-#         return 'red'
-#     return 'black'
-# compr_df['color'] = compr_df['obs'].apply(assign_color)
+# Replace invalid entries with NaN
+def fill_invalid_with_nan(HIPS_FTIR_df):
+    # Specify columns to check
+    columns_to_check = ['BC_HIPS_ug', 'EC_FTIR_ug', 'BC_HIPS_ug/m3', 'EC_FTIR_ug/m3']
+    for col in columns_to_check:
+        HIPS_FTIR_df[col] = HIPS_FTIR_df[col].replace({0: np.nan})  # Replace 0 with NaN
+        HIPS_FTIR_df[col] = HIPS_FTIR_df[col].where(HIPS_FTIR_df[col].notna(), np.nan)  # Keep existing NaNs
+    return HIPS_FTIR_df
 
-# Assign colors based on the 'region' column
-def assign_color(region_value):
-    if region_value == 'Global South':
-        return 'red'
-    else:
-        return 'blue'
-compr_df['color'] = compr_df['region'].apply(assign_color)
-# Print the unique contents of the 'region' column
-unique_regions = compr_df['region'].unique()
-print("Unique regions in the dataset:", unique_regions)
+# Main script
+if __name__ == "__main__":
+    # Read data
+    HIPS_FTIR_df = read_master_files(obs_dir)
+    HIPS_FTIR_df = fill_invalid_with_nan(HIPS_FTIR_df)
+    UV_df = read_UV_Vis_files(out_dir)
 
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(7, 6))
-# Create scatter plot with different markers for SPARTAN and other
-markers = {'SPARTAN': 'o', 'other': 's'}
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, s=60, alpha=0.9, style='source', markers=markers, hue='color', palette=[(0, 0.2, 0.9), (0.7, 0, 0)], edgecolor='k')
-sns.set(font='Arial')
-# Set title, xlim, ylim, ticks, labels
-# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-# plt.xlim([-0.1, 1.5])
-# plt.ylim([-0.1, 1.5])
-# # Set tick locations and labels manually
-# plt.xticks([0, 0.5, 1, 1.5], ['0', '0.5', '1', '1.5'], fontname='Arial', size=18)
-# plt.yticks([0, 0.5, 1, 1.5], ['0', '0.5', '1', '1.5'], fontname='Arial', size=18)
-plt.xlim([-0.5, 11])
-plt.ylim([-0.5, 11])
-# Set tick locations and labels manually
-plt.xticks([0, 2, 4, 6, 8, 10], ['0', '2', '4', '6', '8', '10'], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], ['0', '2', '4', '6', '8', '10'], fontname='Arial', size=18)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+    # Combine the HIPS and UV-Vis datasets based on FilterID
+    BC_df = pd.merge(UV_df, HIPS_FTIR_df, on=['FilterID'], how='outer') # include all rows from both datasets, filling in NaN for missing matches.
+    BC_df['BC_UV-Vis_ug'] = BC_df['f_BC'] * BC_df['mass_ug']
+    BC_df['BC_UV-Vis_ug/m3'] = BC_df['BC_UV-Vis_ug'] / BC_df['Volume_m3']
+    # Rename the Site_x column to Site
+    BC_df.drop('Site_x', axis=1, inplace=True)
+    BC_df.rename(columns={'Site_y': 'Site'}, inplace=True)
+    # Read site details and merge
+    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
+                            usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
+    obs_df = pd.merge(BC_df, site_df, how='left', left_on='Site', right_on='Site_Code').drop('Site_Code', axis=1)
+    obs_df.columns = obs_df.columns.str.strip()
+    # Write HIPS data to Excel
+    with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx"), engine='openpyxl', mode='w') as writer:
+        obs_df.to_excel(writer, sheet_name='All', index=False)
 
-# Add 1:1 line with black dash
-plt.plot([compr_df['obs'].min(), compr_df['obs'].max()], [compr_df['obs'].min(), compr_df['obs'].max()], color='grey', linestyle='--', linewidth=1)
+    # obs_df = obs_df[obs_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
+    # Convert year, month, and day to numeric and strip any whitespace
+    obs_df['start_year'] = pd.to_numeric(obs_df['start_year'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
+    obs_df['start_month'] = pd.to_numeric(obs_df['start_month'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
+    obs_df['start_day'] = pd.to_numeric(obs_df['start_day'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
+    obs_df['start_date'] = pd.to_datetime(
+        obs_df['start_year'].astype(str) + '-' +
+        obs_df['start_month'].astype(str) + '-' +
+        obs_df['start_day'].astype(str),
+        errors='coerce'
+    )
+    # Create summary statistics by 'Country' and 'City'
+    summary_df = obs_df.groupby(['Country', 'City']).agg(
+        earliest_date_HIPS=('start_date', lambda x: x[obs_df['BC_HIPS_ug/m3'].notnull()].min().date()),
+        latest_date_HIPS=('start_date', lambda x: x[obs_df['BC_HIPS_ug/m3'].notnull()].max().date()),
+        earliest_date_EC_FTIR=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3'].notnull()].min().date()),
+        latest_date_EC_FTIR=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3'].notnull()].max().date()),
+        earliest_date_UV_Vis=('start_date', lambda x: x[obs_df['BC_UV-Vis_ug/m3'].notnull()].min().date()),
+        latest_date_UV_Vis=('start_date', lambda x: x[obs_df['BC_UV-Vis_ug/m3'].notnull()].max().date()),
+        count_BC_HIPS=('BC_HIPS_ug/m3', 'count'),
+        count_EC_FTIR=('EC_FTIR_ug/m3', 'count'),
+        count_BC_UV_Vis=('BC_UV-Vis_ug/m3', 'count')
+    ).reset_index()
+    with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx"), engine='openpyxl', mode='a') as writer:
+        summary_df.to_excel(writer, sheet_name='Summary', index=False)
+plt.rcParams['font.family'] = 'Arial'
+# Load the data from the Excel file
+obs_df = pd.read_excel(
+    '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx',
+    sheet_name='Summary'
+)
 
-# Perform linear regression for all segments
-mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
-slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['obs'][mask], compr_df['sim'][mask])
-# Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask], scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# Filter out cities where all counts are 0
+obs_df = obs_df[(obs_df['count_BC_HIPS'] != 0) |
+                (obs_df['count_EC_FTIR'] != 0) |
+                (obs_df['count_BC_UV_Vis'] != 0)]
 
-# Add text with linear regression equations and other statistics
-intercept_display = abs(intercept)
-intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.6, 0.85, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='black')
+# Melt the DataFrame for easier plotting
+melted_df = obs_df.melt(
+    id_vars=['Country', 'City',
+             'earliest_date_HIPS', 'latest_date_HIPS',
+             'earliest_date_EC_FTIR', 'latest_date_EC_FTIR',
+             'earliest_date_UV_Vis', 'latest_date_UV_Vis'],
+    value_vars=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
+    var_name='Measurement',
+    value_name='Count'
+)
+# Create a custom color palette
+custom_palette = {
+    'count_BC_HIPS': 'green',  # Black for HIPS
+    'count_EC_FTIR': 'blue',    # Blue for FT-IR
+    'count_BC_UV_Vis': 'red'     # Red for UV-Vis
+}
+# Create bar plot
+plt.figure(figsize=(12, 8))
+bar_plot = sns.barplot(data=melted_df, x='City', y='Count', hue='Measurement',
+                        hue_order=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
+                        palette=custom_palette)
 
-# Add the number of data points for each segment
-num_points = mask.sum()
-plt.text(0.6, 0.79, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
 
-# Set labels
-plt.xlabel('Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
-# Create a custom legend for the source only
 
-spartan_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='o', linestyle='None', markersize=8, label='SPARTAN')
-other_legend = mlines.Line2D([], [], color=(0, 0.2, 0.9), markeredgecolor='k', marker='s', linestyle='None', markersize=8, label='other Meas')
-legend = plt.legend(handles=[spartan_legend, other_legend], fontsize=12, frameon=False, loc=(0.75, 0.05))
-plt.setp(legend.get_texts(), fontname='Arial')
-legend.get_frame().set_facecolor('white') # Disable Legend
-# plt.legend().remove()
+# Rotate x-ticks for better readability
+plt.xticks(rotation=90)
+plt.xlabel('City')
+plt.ylabel('Count')
+plt.title('Counts of HIPS, FT-IR, and UV-Vis Measurements')
+plt.ylim(0, 320)
+# Create a dictionary to map each measurement to its earliest and latest dates
+measurements_dict = {
+    'count_BC_HIPS': ('earliest_date_HIPS', 'latest_date_HIPS', 'HIPS'),
+    'count_EC_FTIR': ('earliest_date_EC_FTIR', 'latest_date_EC_FTIR', 'EC FTIR'),
+    'count_BC_UV_Vis': ('earliest_date_UV_Vis', 'latest_date_UV_Vis', 'UV Vis')
+}
 
-# Show the plot
+# Add earliest and latest date as annotations for each measurement
+for index, row in melted_df.iterrows():
+    city = row['City']
+    measurement = row['Measurement']
+
+    # Get earliest and latest dates from the dictionary
+    earliest_date_col, latest_date_col, label = measurements_dict[measurement]
+    earliest_date = obs_df.loc[obs_df['City'] == city, earliest_date_col].values[0]
+    latest_date = obs_df.loc[obs_df['City'] == city, latest_date_col].values[0]
+
+    # Format the dates as strings without measurement labels
+    def format_date(date):
+        if pd.isna(date):  # Check if the date is NaT
+            return ''
+        else:
+            return pd.to_datetime(date).strftime('%Y-%m-%d')
+
+    # Construct date ranges for annotations
+    earliest_date_str = format_date(earliest_date)
+    latest_date_str = format_date(latest_date)
+    date_range = f"{earliest_date_str} to {latest_date_str}"
+    # Check if both dates are valid and construct date range accordingly
+    date_range = ""
+    if earliest_date_str and latest_date_str:  # Both dates are valid
+        date_range = f"{earliest_date_str} to {latest_date_str}"
+    elif earliest_date_str:  # Only earliest date is valid
+        date_range = earliest_date_str
+    elif latest_date_str:  # Only latest date is valid
+        date_range = latest_date_str
+
+    # Calculate bar position: add 0.2 for spacing between groups
+    bar_pos = index % len(obs_df['City'].unique()) + (index // len(obs_df['City'].unique())) * 0.3
+    # Adding the annotation above the bar
+    plt.text(bar_pos - 0.25, row['Count'] + 2,  # Adjust gap as needed
+             date_range,
+             ha='center', fontsize=8, color='k', fontweight='regular', rotation=90)
+handles, labels = bar_plot.get_legend_handles_labels()
+custom_labels = ['HIPS', 'FT-IR', 'UV-Vis']
+bar_plot.legend(handles, custom_labels, loc='upper left', frameon=True)  # frameon=False removes the outer line
+
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS6_Scatter_{}_{}_{}_Sim_vs_SPARTAN_other_{}_AnnualMean_MAC10_ColorByRegion.svg'.format(cres, inventory, deposition, species), dpi=300)
-
+plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_counts.tiff', dpi=300)
 plt.show()

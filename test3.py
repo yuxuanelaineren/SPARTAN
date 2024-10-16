@@ -139,6 +139,8 @@ for face in range(6):
 # Read annual comparison data
 compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
                           sheet_name='Annual')
+# Filter to include only rows where 'Length' is 'long'
+compar_df = compar_df[compar_df['Length'] == 'long']
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
 # Adjust SPARTAN observations
 compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 0.6
@@ -215,5 +217,5 @@ cbar.ax.tick_params(axis='y', labelsize=12)
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 
-# plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_NMD.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.savefig(out_dir + 'Fig2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_MAC10_NMD>6mo.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
