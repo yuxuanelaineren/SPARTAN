@@ -1949,7 +1949,7 @@ plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/c360_CEDS_noLUO_2
 
 plt.show()
 ################################################################################################
-# Extract BC_HIPS from masterfile and plot bc count
+# Extract BC_HIPS from masterfile, FT-IR from raw data, UV-Vis from raw data and plot BC count
 ################################################################################################
 # Function to read and preprocess data from master files
 def read_master_files(obs_dir):
@@ -2065,6 +2065,7 @@ if __name__ == "__main__":
     ).reset_index()
     with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx"), engine='openpyxl', mode='a') as writer:
         summary_df.to_excel(writer, sheet_name='Summary', index=False)
+
 plt.rcParams['font.family'] = 'Arial'
 # Load the data from the Excel file
 obs_df = pd.read_excel(
@@ -2074,33 +2075,32 @@ obs_df = pd.read_excel(
 
 # Filter out cities where all counts are 0
 obs_df = obs_df[(obs_df['count_BC_HIPS'] != 0) |
-                (obs_df['count_EC_FTIR'] != 0) |
+                (obs_df['count_EC_FTIR_raw'] != 0) |
                 (obs_df['count_BC_UV_Vis'] != 0)]
-
+# Print unique cities
+unique_cities = obs_df['City'].unique()
+print("Unique Cities:", unique_cities)
 # Melt the DataFrame for easier plotting
 melted_df = obs_df.melt(
     id_vars=['Country', 'City',
              'earliest_date_HIPS', 'latest_date_HIPS',
-             'earliest_date_EC_FTIR', 'latest_date_EC_FTIR',
+             'earliest_date_EC_FTIR_raw', 'latest_date_EC_FTIR_raw',
              'earliest_date_UV_Vis', 'latest_date_UV_Vis'],
-    value_vars=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
+    value_vars=['count_BC_HIPS', 'count_EC_FTIR_raw', 'count_BC_UV_Vis'],
     var_name='Measurement',
     value_name='Count'
 )
 # Create a custom color palette
 custom_palette = {
     'count_BC_HIPS': 'green',  # Black for HIPS
-    'count_EC_FTIR': 'blue',    # Blue for FT-IR
+    'count_EC_FTIR_raw': 'blue',    # Blue for FT-IR
     'count_BC_UV_Vis': 'red'     # Red for UV-Vis
 }
 # Create bar plot
 plt.figure(figsize=(12, 8))
 bar_plot = sns.barplot(data=melted_df, x='City', y='Count', hue='Measurement',
-                        hue_order=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
+                        hue_order=['count_BC_HIPS', 'count_EC_FTIR_raw', 'count_BC_UV_Vis'],
                         palette=custom_palette)
-
-
-
 
 # Rotate x-ticks for better readability
 plt.xticks(rotation=90)
@@ -2111,7 +2111,7 @@ plt.ylim(0, 320)
 # Create a dictionary to map each measurement to its earliest and latest dates
 measurements_dict = {
     'count_BC_HIPS': ('earliest_date_HIPS', 'latest_date_HIPS', 'HIPS'),
-    'count_EC_FTIR': ('earliest_date_EC_FTIR', 'latest_date_EC_FTIR', 'EC FTIR'),
+    'count_EC_FTIR_raw': ('earliest_date_EC_FTIR_raw', 'latest_date_EC_FTIR_raw', 'EC FTIR_raw'),
     'count_BC_UV_Vis': ('earliest_date_UV_Vis', 'latest_date_UV_Vis', 'UV Vis')
 }
 
@@ -2148,7 +2148,7 @@ for index, row in melted_df.iterrows():
     # Calculate bar position: add 0.2 for spacing between groups
     bar_pos = index % len(obs_df['City'].unique()) + (index // len(obs_df['City'].unique())) * 0.3
     # Adding the annotation above the bar
-    plt.text(bar_pos - 0.25, row['Count'] + 2,  # Adjust gap as needed
+    plt.text(bar_pos - 0.25, row['Count'] + 2,
              date_range,
              ha='center', fontsize=8, color='k', fontweight='regular', rotation=90)
 handles, labels = bar_plot.get_legend_handles_labels()
@@ -2156,5 +2156,5 @@ custom_labels = ['HIPS', 'FT-IR', 'UV-Vis']
 bar_plot.legend(handles, custom_labels, loc='upper left', frameon=True)  # frameon=False removes the outer line
 
 plt.tight_layout()
-plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_counts.tiff', dpi=300)
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_counts_rawFTIR.tiff', dpi=300)
 plt.show()

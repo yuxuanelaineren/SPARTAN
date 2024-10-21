@@ -1,96 +1,69 @@
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-plt.rcParams['font.family'] = 'Arial'
-# Load the data from the Excel file
-obs_df = pd.read_excel(
-    '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx',
-    sheet_name='Summary'
-)
+import numpy as np
+from scipy.stats import linregress
 
-# Filter out cities where all counts are 0
-obs_df = obs_df[(obs_df['count_BC_HIPS'] != 0) |
-                (obs_df['count_EC_FTIR'] != 0) |
-                (obs_df['count_BC_UV_Vis'] != 0)]
+# Define file paths
+input_file = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx'
+output_file = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/UV-Vis_Joshin_20230510_HIPS_ComparionsBySite.xlsx'
 
-# Melt the DataFrame for easier plotting
-melted_df = obs_df.melt(
-    id_vars=['Country', 'City',
-             'earliest_date_HIPS', 'latest_date_HIPS',
-             'earliest_date_EC_FTIR', 'latest_date_EC_FTIR',
-             'earliest_date_UV_Vis', 'latest_date_UV_Vis'],
-    value_vars=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
-    var_name='Measurement',
-    value_name='Count'
-)
-# Create a custom color palette
-custom_palette = {
-    'count_BC_HIPS': 'green',  # Black for HIPS
-    'count_EC_FTIR': 'blue',    # Blue for FT-IR
-    'count_BC_UV_Vis': 'red'     # Red for UV-Vis
-}
-# Create bar plot
-plt.figure(figsize=(12, 8))
-bar_plot = sns.barplot(data=melted_df, x='City', y='Count', hue='Measurement',
-                        hue_order=['count_BC_HIPS', 'count_EC_FTIR', 'count_BC_UV_Vis'],
-                        palette=custom_palette)
+# Load the data from the specified sheet
+df = pd.read_excel(input_file, sheet_name='All')
 
+# Filter rows where both 'BC_HIPS_ug/m3' and 'BC_UV-Vis_ug/m3' have data (non-null)
+df_filtered = df.dropna(subset=['BC_HIPS_ug/m3', 'BC_UV-Vis_ug/m3'])
 
+# Exclude rows where 'f_BC' > 0.8
+df_filtered = df_filtered[df_filtered['f_BC'] <= 0.8]
+df_filtered = df_filtered[df_filtered['BC_HIPS_ug/m3'] > 0]
+# Group by 'Site'
+grouped = df_filtered.groupby('Site')
 
+# Create a list to store summary statistics and regression results
+summary_list = []
 
-# Rotate x-ticks for better readability
-plt.xticks(rotation=90)
-plt.xlabel('City')
-plt.ylabel('Count')
-plt.title('Counts of HIPS, FT-IR, and UV-Vis Measurements')
-plt.ylim(0, 320)
-# Create a dictionary to map each measurement to its earliest and latest dates
-measurements_dict = {
-    'count_BC_HIPS': ('earliest_date_HIPS', 'latest_date_HIPS', 'HIPS'),
-    'count_EC_FTIR': ('earliest_date_EC_FTIR', 'latest_date_EC_FTIR', 'EC FTIR'),
-    'count_BC_UV_Vis': ('earliest_date_UV_Vis', 'latest_date_UV_Vis', 'UV Vis')
-}
+# Loop through each group (site)
+for site, group in grouped:
+    # Calculate statistics for 'BC_HIPS_ug/m3' and 'BC_UV-Vis_ug/m3'
+    hips_avg = group['BC_HIPS_ug/m3'].mean()
+    hips_median = group['BC_HIPS_ug/m3'].median()
+    hips_std_error = group['BC_HIPS_ug/m3'].std() / np.sqrt(len(group))
 
-# Add earliest and latest date as annotations for each measurement
-for index, row in melted_df.iterrows():
-    city = row['City']
-    measurement = row['Measurement']
+    uv_avg = group['BC_UV-Vis_ug/m3'].mean()
+    uv_median = group['BC_UV-Vis_ug/m3'].median()
+    uv_std_error = group['BC_UV-Vis_ug/m3'].std() / np.sqrt(len(group))
 
-    # Get earliest and latest dates from the dictionary
-    earliest_date_col, latest_date_col, label = measurements_dict[measurement]
-    earliest_date = obs_df.loc[obs_df['City'] == city, earliest_date_col].values[0]
-    latest_date = obs_df.loc[obs_df['City'] == city, latest_date_col].values[0]
+    # Check if there's enough variation in the data for regression
+    if group['BC_HIPS_ug/m3'].std() > 0:
+        # Perform linear regression
+        slope, intercept, r_value, p_value, std_err = linregress(group['BC_HIPS_ug/m3'], group['BC_UV-Vis_ug/m3'])
+        r_squared = r_value ** 2
+    else:
+        # If no variation, skip regression and set results to NaN
+        slope = np.nan
+        intercept = np.nan
+        r_squared = np.nan
+        std_err = np.nan
 
-    # Format the dates as strings without measurement labels
-    def format_date(date):
-        if pd.isna(date):  # Check if the date is NaT
-            return ''
-        else:
-            return pd.to_datetime(date).strftime('%Y-%m-%d')
+    # Append the results
+    summary_list.append({
+        'Site': site,
+        'BC_HIPS_Avg': hips_avg,
+        'BC_HIPS_Median': hips_median,
+        'BC_HIPS_StdError': hips_std_error,
+        'BC_UV-Vis_Avg': uv_avg,
+        'BC_UV-Vis_Median': uv_median,
+        'BC_UV-Vis_StdError': uv_std_error,
+        'Slope': slope,
+        'Intercept': intercept,
+        'R_squared': r_squared,
+        'Count': len(group)
+    })
 
-    # Construct date ranges for annotations
-    earliest_date_str = format_date(earliest_date)
-    latest_date_str = format_date(latest_date)
-    date_range = f"{earliest_date_str} to {latest_date_str}"
-    # Check if both dates are valid and construct date range accordingly
-    date_range = ""
-    if earliest_date_str and latest_date_str:  # Both dates are valid
-        date_range = f"{earliest_date_str} to {latest_date_str}"
-    elif earliest_date_str:  # Only earliest date is valid
-        date_range = earliest_date_str
-    elif latest_date_str:  # Only latest date is valid
-        date_range = latest_date_str
+# Create a DataFrame from the summary list
+summary_df = pd.DataFrame(summary_list)
 
-    # Calculate bar position: add 0.2 for spacing between groups
-    bar_pos = index % len(obs_df['City'].unique()) + (index // len(obs_df['City'].unique())) * 0.3
-    # Adding the annotation above the bar
-    plt.text(bar_pos - 0.25, row['Count'] + 2,  # Adjust gap as needed
-             date_range,
-             ha='center', fontsize=8, color='k', fontweight='regular', rotation=90)
-handles, labels = bar_plot.get_legend_handles_labels()
-custom_labels = ['HIPS', 'FT-IR', 'UV-Vis']
-bar_plot.legend(handles, custom_labels, loc='upper left', frameon=True)  # frameon=False removes the outer line
+# Save the summary to an Excel file
+with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+    summary_df.to_excel(writer, sheet_name='HIPS_Comparison', index=False)
 
-plt.tight_layout()
-plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_counts.tiff', dpi=300)
-plt.show()
+print(f"Filtered data and analysis results saved to {output_file}, sheet: 'HIPS_Comparison'")
