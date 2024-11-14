@@ -760,8 +760,8 @@ plt.show()
 # Other Measurements: Summarize IMPROVE EC data
 ################################################################################################
 # Read the data
-other_obs_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
-IMPROVE_df = pd.read_excel(other_obs_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
+otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/Other_Measurements/'
+IMPROVE_df = pd.read_excel(otherMeas_dir + 'IMPROVE_EC_2019_raw.xlsx', sheet_name='Data')
 
 # Convert 'Date' column to datetime format
 IMPROVE_df['Date'] = pd.to_datetime(IMPROVE_df['Date'], format='%m/%d/%Y')

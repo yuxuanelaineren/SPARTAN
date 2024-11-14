@@ -30,176 +30,136 @@ inventory = 'CEDS'
 deposition = 'noLUO'
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}-{}/monthly/'.format(cres.lower(), deposition) # CEDS, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/output-{}/monthly/'.format(cres.lower()) # HTAP, LUO
-# sim_dir = '/Volumes/rvmartin/Active/dandan.z/AnalData/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/WUCR3-C360/' # EDGAR, LUO
-# sim_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year) # C720, HTAP, LUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-EDGARv61-vert-{}-output/monthly/'.format(cres.lower(), deposition) # EDGAR, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-HTAPv3-vert-{}-output/monthly/'.format(cres.lower(), deposition) # HTAP, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C3720, noLUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
-FTIR_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/FTIR/raw_data_and_reports/'
+otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Extract BC_HIPS from masterfile and lon/lat from site.details
+# Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
 ################################################################################################
-# Function to read and preprocess data from master files
-def read_master_files(obs_dir):
-    excluded_filters = [
-        'AEAZ-0078', 'AEAZ-0086', 'AEAZ-0089', 'AEAZ-0090', 'AEAZ-0093', 'AEAZ-0097',
-        'AEAZ-0106', 'AEAZ-0114', 'AEAZ-0115', 'AEAZ-0116', 'AEAZ-0141', 'AEAZ-0142',
-        'BDDU-0346', 'BDDU-0347', 'BDDU-0349', 'BDDU-0350', 'MXMC-0006', 'NGIL-0309'
-    ]
-    HIPS_FTIR_dfs = []
-    for filename in os.listdir(obs_dir):
-        if filename.endswith('.csv'):
-            master_data = pd.read_csv(os.path.join(obs_dir, filename), encoding='ISO-8859-1')
-            HIPS_FTIR_columns = ['FilterID', 'start_year', 'start_month', 'start_day', 'Mass_type', 'mass_ug', 'Volume_m3',
-                            'BC_HIPS_ug', 'EC_FTIR_ug', 'Flags']
-            if all(col in master_data.columns for col in HIPS_FTIR_columns):
-                # Select the specified columns
-                master_data.columns = master_data.columns.str.strip()
-                HIPS_FTIR_df = master_data[HIPS_FTIR_columns].copy()
-                # Exclude specific FilterID values
-                HIPS_FTIR_df = HIPS_FTIR_df[~HIPS_FTIR_df['FilterID'].isin(excluded_filters)]
-                # Select PM2.5
-                HIPS_FTIR_df['Mass_type'] = pd.to_numeric(HIPS_FTIR_df['Mass_type'], errors='coerce')
-                HIPS_FTIR_df = HIPS_FTIR_df.loc[HIPS_FTIR_df['Mass_type'] == 1]
-                # Convert the relevant columns to numeric
-                HIPS_FTIR_df[['BC_HIPS_ug', 'EC_FTIR_ug', 'mass_ug', 'Volume_m3', 'start_year', 'start_month', 'start_day']] = HIPS_FTIR_df[
-                    ['BC_HIPS_ug', 'EC_FTIR_ug', 'mass_ug', 'Volume_m3', 'start_year', 'start_month', 'start_day']].apply(pd.to_numeric, errors='coerce')
-                # Select year 2019 - 2023
-                # HIPS_df = HIPS_df[HIPS_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
-                # Drop rows with NaN values
-                HIPS_FTIR_df = HIPS_FTIR_df.dropna(subset=['start_year', 'Volume_m3'])
-                HIPS_FTIR_df = HIPS_FTIR_df[HIPS_FTIR_df['Volume_m3'] > 0]
-                # HIPS_df = HIPS_df[HIPS_df['BC_HIPS_ug'] > 0]
-                # Calculate BC concentrations
-                HIPS_FTIR_df.rename(columns={'EC_FTIR_ug': 'EC_FTIR_ug_master'}, inplace=True)
-                HIPS_FTIR_df['BC_HIPS_ug/m3'] = HIPS_FTIR_df['BC_HIPS_ug'] / HIPS_FTIR_df['Volume_m3']
-                HIPS_FTIR_df['EC_FTIR_ug/m3_master'] = HIPS_FTIR_df['EC_FTIR_ug_master'] / HIPS_FTIR_df['Volume_m3']
-                HIPS_FTIR_df['PM25_ug/m3'] = HIPS_FTIR_df['mass_ug'] / HIPS_FTIR_df['Volume_m3']
-                # Extract the site name and add as a column
-                site_name = filename.split('_')[0]
-                HIPS_FTIR_df["Site"] = [site_name] * len(HIPS_FTIR_df)
-                # Append the current HIPS_df to the list
-                HIPS_FTIR_dfs.append(HIPS_FTIR_df)
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.03
+bottom = 0.05
+width = 0.94
+height = 0.9
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+# ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
+ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
+# ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
+
+# Define the colormap
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)] # white-blure-green-yellow-orange-red
+# colors = [(0, 0, 0.6), (0, 0, 1),(0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9), (0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)] # dark blue to light blue to light red to dark red
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+vmax = 4
+
+# Accumulate data for each face over the year
+annual_conc = None
+for face in range(6):
+    print(f"Processing face {face}")
+    for mon in range(1, 13):
+        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+        with xr.open_dataset(
+            sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') as sim_df:  # CEDS
+            x = sim_df.corner_lons.isel(nf=face)
+            y = sim_df.corner_lats.isel(nf=face)
+            print(np.array(sim_df[species]).shape) # (72, 6, 360, 360)
+            conc = sim_df[species].isel(lev=0, nf=face).load()
+            if annual_conc is None:
+                annual_conc = conc
             else:
-                print(f"Skipping {filename} because not all required columns are present.")
-    return pd.concat(HIPS_FTIR_dfs, ignore_index=True)
+                annual_conc = annual_conc + conc
+        print("File closed.")
+    # Calculate the annual average
+    annual_conc /= 12
+    # annual_conc = annual_conc.squeeze() # (1, 360, 360) to (360, 360)
+    # annual_conc = annual_conc[0, :, :] # (72, 360, 360) to (360, 360)
+    print(x.shape, y.shape, annual_conc.shape)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-# Function to read and preprocess UV-Vis data
-def read_UV_Vis_files(out_dir):
-    UV_df = pd.read_excel(os.path.join(out_dir, 'BC_UV-Vis_SPARTAN/BC_UV-Vis_SPARTAN_Joshin_20230510.xlsx'),
-                          usecols=['Filter ID', 'f_BC', 'Location ID'])
-    # Drop the last two digits in the 'Filter ID' column: 'AEAZ-0113-1' to 'AEAZ-0113'
-    UV_df['FilterID'] = UV_df['Filter ID'].str[:-2]
-    UV_df.rename(columns={'Location ID': 'Site'}, inplace=True)
-    # Convert columns to numeric
-    UV_df['f_BC'] = pd.to_numeric(UV_df['f_BC'], errors='coerce')
-    # Exclude values where f_BC > 0.8
-    UV_df = UV_df[UV_df['f_BC'] <= 0.8]
-    return UV_df
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+# Adjust SPARTAN observations
+compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 1
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Measurement
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Calculate mean and standard error for SPARTAN sites
+spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+# spartan_developed_data = spartan_data[spartan_data['marker'] != 'Global South']
+# spartan_gs_data = spartan_data[spartan_data['marker'] == 'Global South']
+other_data = compar_notna[compar_notna['source'] == 'other']
+mean_obs = np.mean(spartan_data['obs'])
+std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+mean_sim = np.mean(spartan_data['sim'])
+std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# Calculate NMD and NMB for SPARTAN sites
+NMD_spartan = np.sum(np.abs(spartan_data['sim'] - spartan_data['obs'])) / np.sum(spartan_data['obs'])
+NMB_spartan = np.sum(spartan_data['sim'] - spartan_data['obs']) / np.sum(spartan_data['obs'])
+# Print the final values
+# print(f"Normalized Mean Difference at SPARTAN sites (NMD_spartan): {NMD_spartan:.4f}")
+# print(f"Normalized Mean Bias at SPARTAN sites (NMB_spartan): {NMB_spartan:.4f}")
+# Add text annotations to the plot
+# ax.text(0.3, 0.04, f'NMD across SPARTAN sites = {NMD_spartan * 100:.0f}%', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-# Function to read and preprocess raw FTIR data
-def read_FTIR_raw_data(FTIR_dir):
-    # Read the two Excel files
-    raw_batch4_df = pd.read_excel(FTIR_dir + '04_SPARTAN_FTIR data_batch 4_ Nov2022 to March2024.xlsx', header=1)
-    raw_batch2and3_df = pd.read_excel(FTIR_dir + '04_SPARTAN_FTIR data batch 2 and 3 resubmitted with MDLs.xlsx',
-                                      header=1)
-    raw_batch1_df = pd.read_excel(FTIR_dir + '01_SPARTAN_FTIR_and_FG_predictions_08032022.xlsx',
-                                      header=1)
-    # Standardize the 'date' column
-    raw_batch4_df['date'] = pd.to_datetime(raw_batch4_df['date'], errors='coerce')
-    raw_batch2and3_df['date'] = pd.to_datetime(raw_batch2and3_df['date'], errors='coerce')
-    raw_batch1_df.rename(columns={'Date': 'date'}, inplace=True)
-    raw_batch1_df.rename(columns={'SiteID': 'site'}, inplace=True)
-    raw_batch1_df.rename(columns={'EC': 'FTIR_EC'}, inplace=True)
-    raw_batch1_df['date'] = pd.to_datetime(raw_batch2and3_df['date'], errors='coerce')
-    # Handle missing values or NA values as necessary
-    raw_batch4_df = raw_batch4_df.fillna(0)
-    raw_batch2and3_df = raw_batch2and3_df.fillna(0)
-    raw_batch1_df = raw_batch1_df.fillna(0)
-    # Check the columns for both dataframes and ensure consistency
-    # common_columns = ['site', 'date', 'FTIR_EC', 'EC MDL']
-    common_columns = ['site', 'date', 'FTIR_EC']
-    raw_batch4_df = raw_batch4_df[common_columns]
-    raw_batch2and3_df = raw_batch2and3_df[common_columns]
-    raw_batch1_df = raw_batch1_df[common_columns]
-    # Merge the dataframes
-    FTIR_raw_df = pd.concat([raw_batch4_df, raw_batch2and3_df, raw_batch1_df], ignore_index=True)
-    FTIR_raw_df = FTIR_raw_df.dropna(subset=['date', 'FTIR_EC'])
-    FTIR_raw_df.rename(columns={'date': 'start_date'}, inplace=True)
-    FTIR_raw_df.rename(columns={'site': 'Site'}, inplace=True)
-    FTIR_raw_df = FTIR_raw_df[FTIR_raw_df['start_date'] != 0]
-    return FTIR_raw_df
+# # Create an inset axes for the color bar at the left middle of the plot
+# cbar_axes = inset_axes(ax,
+#                            width='1.5%',
+#                            height='50%',
+#                            bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
+#                            bbox_transform=ax.transAxes,
+#                            borderpad=0,
+#                            )
+# cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+# font_properties = font_manager.FontProperties(family='Arial', size=12)
+# cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+# cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+# cbar.ax.tick_params(axis='y', labelsize=12)
+# cbar.outline.set_edgecolor('black')
+# cbar.outline.set_linewidth(1)
 
-# Replace invalid entries with NaN
-def fill_invalid_with_nan(HIPS_FTIR_df):
-    # Specify columns to check
-    columns_to_check = ['BC_HIPS_ug', 'EC_FTIR_ug_master', 'BC_HIPS_ug/m3', 'EC_FTIR_ug/m3_master']
-    for col in columns_to_check:
-        HIPS_FTIR_df[col] = HIPS_FTIR_df[col].replace({0: np.nan})  # Replace 0 with NaN
-        HIPS_FTIR_df[col] = HIPS_FTIR_df[col].where(HIPS_FTIR_df[col].notna(), np.nan)  # Keep existing NaNs
-    return HIPS_FTIR_df
-
-# Main script
-if __name__ == "__main__":
-    # Read data
-    HIPS_FTIR_df = read_master_files(obs_dir)
-    HIPS_FTIR_df = fill_invalid_with_nan(HIPS_FTIR_df)
-    UV_df = read_UV_Vis_files(out_dir)
-    FTIR_raw_df = read_FTIR_raw_data(FTIR_dir)
-
-    # Combine the HIPS and UV-Vis datasets based on FilterID
-    BC_df = pd.merge(UV_df, HIPS_FTIR_df, on=['FilterID'], how='outer') #include all rows from both datasets, filling in NaN for missing matches.
-    BC_df['BC_UV-Vis_ug'] = BC_df['f_BC'] * BC_df['mass_ug']
-    BC_df['BC_UV-Vis_ug/m3'] = BC_df['BC_UV-Vis_ug'] / BC_df['Volume_m3']
-    # Rename the Site_x column to Site
-    BC_df.drop('Site_x', axis=1, inplace=True)
-    BC_df.rename(columns={'Site_y': 'Site'}, inplace=True)
-    # Convert year, month, and day to numeric and strip any whitespace
-    BC_df['start_year'] = pd.to_numeric(BC_df['start_year'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
-    BC_df['start_month'] = pd.to_numeric(BC_df['start_month'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
-    BC_df['start_day'] = pd.to_numeric(BC_df['start_day'].astype(str).str.strip(), errors='coerce').fillna(0).astype(int)
-    BC_df['start_date'] = pd.to_datetime(
-        BC_df['start_year'].astype(str) + '-' +
-        BC_df['start_month'].astype(str) + '-' +
-        BC_df['start_day'].astype(str),
-        errors='coerce'
-    ).dt.date  # Retain only the date, discard the time part
-
-    # Combine HIPS, UV-Vis, and FTIR datasets based on date and site
-    BC_df['start_date'] = pd.to_datetime(BC_df['start_date'])
-    FTIR_raw_df['start_date'] = pd.to_datetime(FTIR_raw_df['start_date'], errors='coerce')
-    FTIR_raw_df = FTIR_raw_df.dropna(subset=['start_date'])
-    BC_df = pd.merge(BC_df, FTIR_raw_df[['Site', 'start_date', 'FTIR_EC']], on=['Site', 'start_date'], how='left')
-    BC_df.rename(columns={'FTIR_EC': 'EC_FTIR_ug/m3_raw'}, inplace=True)
-    # Read site details and merge
-    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
-                            usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
-    obs_df = pd.merge(BC_df, site_df, how='left', left_on='Site', right_on='Site_Code').drop('Site_Code', axis=1)
-    obs_df.columns = obs_df.columns.str.strip()
-    # Write HIPS data to Excel
-    with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx"), engine='openpyxl', mode='w') as writer:
-        obs_df.to_excel(writer, sheet_name='All', index=False)
-
-    # obs_df = obs_df[obs_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
-
-    # Create summary statistics by 'Country' and 'City'
-    summary_df = obs_df.groupby(['Country', 'City']).agg(
-        earliest_date_HIPS=('start_date', lambda x: x[obs_df['BC_HIPS_ug/m3'].notnull()].min().date()),
-        latest_date_HIPS=('start_date', lambda x: x[obs_df['BC_HIPS_ug/m3'].notnull()].max().date()),
-        earliest_date_EC_FTIR_master=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3_master'].notnull()].min().date()),
-        latest_date_EC_FTIR_master=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3_master'].notnull()].max().date()),
-        earliest_date_EC_FTIR_raw=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3_raw'].notnull()].min().date()),
-        latest_date_EC_FTIR_raw=('start_date', lambda x: x[obs_df['EC_FTIR_ug/m3_raw'].notnull()].max().date()),
-        earliest_date_UV_Vis=('start_date', lambda x: x[obs_df['BC_UV-Vis_ug/m3'].notnull()].min().date()),
-        latest_date_UV_Vis=('start_date', lambda x: x[obs_df['BC_UV-Vis_ug/m3'].notnull()].max().date()),
-        count_BC_HIPS=('BC_HIPS_ug/m3', 'count'),
-        count_EC_FTIR_master=('EC_FTIR_ug/m3_master', 'count'),
-        count_EC_FTIR_raw=('EC_FTIR_ug/m3_raw', 'count'),
-        count_BC_UV_Vis=('BC_UV-Vis_ug/m3', 'count')
-    ).reset_index()
-    with pd.ExcelWriter(os.path.join(out_dir, "BC_HIPS_FTIR_UV-Vis_SPARTAN_allYears.xlsx"), engine='openpyxl', mode='a') as writer:
-        summary_df.to_excel(writer, sheet_name='Summary', index=False)
+plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_China.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.show()
