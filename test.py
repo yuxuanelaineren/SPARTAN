@@ -23,18 +23,18 @@ import matplotlib.colors as mcolors
 from scipy.io import loadmat
 import matplotlib.lines as mlines
 
-cres = 'C360'
-year = 2019
+cres = 'C720'
+year = 2022
 species = 'BC'
 inventory = 'CEDS'
 deposition = 'noLUO'
 meteorology = 'GEOSFP'
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-EDGARv61-vert-{}-output/monthly/'.format(cres.lower(), deposition) # EDGAR, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-HTAPv3-vert-{}-output/monthly/'.format(cres.lower(), deposition) # HTAP, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C3720, noLUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C720, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, LUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-merra2-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, MERRA2
@@ -54,11 +54,11 @@ def find_and_add_location(lat, lon):
 
 # Create empty lists to store data for each month
 monthly_data = []
-for mon in range(1, 13):
-    sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition,year, mon), engine='netcdf4') # CEDS, c360, noLUO
+for mon in range(1, 2):
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition,year, mon), engine='netcdf4') # CEDS, c360, noLUO
     # sim_df = xr.open_dataset(sim_dir + '{}.{}.EDGARv61-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') # EDGAR, noLUO
     # sim_df = xr.open_dataset(sim_dir + '{}.{}.HTAPv3-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') # HTAP, noLUO
-    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.GEOSFP-CSwinds.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c720, noLUO
+    sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.GEOSFP-CSwinds.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c720, noLUO
     # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.GEOSFP.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c360, LUO
     # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.{}.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, meteorology, year, mon), engine='netcdf4') # CEDS, c180, noLUO, GEOS-FP
     # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.{}.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, meteorology, year, mon), engine='netcdf4')  # CEDS, c180, noLUO, MERRA2
@@ -77,7 +77,7 @@ for mon in range(1, 13):
     # pw_conc = (pop * sim_conc) / np.nansum(pop)  # compute pw conc for each grid point, would be super small and not-meaningful
 
     # Load the Data
-    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/Summary_measurements_2019.xlsx')
+    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx',sheet_name='All')
     site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
                             usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
     # Filter obs_df based on 'start_month'
@@ -154,9 +154,9 @@ for mon in range(1, 13):
                                                    result_type='expand')
     print(compr_df)
 
-    # # Save monthly CSV file
-    # outfile = os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon))
-    # compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
+    # Save monthly CSV file
+    outfile = os.path.join(out_dir, '{}_{}_{}_MERRA2_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon))
+    compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
 
     # Append data to the monthly_data list
     monthly_data.append(compr_df)
@@ -185,8 +185,8 @@ annual_df = monthly_df.groupby(['country', 'city']).agg({
 }).reset_index()
 annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
 
-with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
-    monthly_df.to_excel(writer, sheet_name='Mon', index=False)
-    annual_df.to_excel(writer, sheet_name='Annual', index=False)
+# with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
+#     monthly_df.to_excel(writer, sheet_name='Mon', index=False)
+#     annual_df.to_excel(writer, sheet_name='Annual', index=False)
 
 sim_df.close()

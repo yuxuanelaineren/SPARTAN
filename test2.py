@@ -55,10 +55,10 @@ ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
 ax.set_global()
 # ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
-ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
 # ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
 # ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
-# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
+ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
 # ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
 
 # Define the colormap
@@ -145,21 +145,21 @@ NMB_spartan = np.sum(spartan_data['sim'] - spartan_data['obs']) / np.sum(spartan
 # ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
 # plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-# # Create an inset axes for the color bar at the left middle of the plot
-# cbar_axes = inset_axes(ax,
-#                            width='1.5%',
-#                            height='50%',
-#                            bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
-#                            bbox_transform=ax.transAxes,
-#                            borderpad=0,
-#                            )
-# cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
-# font_properties = font_manager.FontProperties(family='Arial', size=12)
-# cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
-# cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
-# cbar.ax.tick_params(axis='y', labelsize=12)
-# cbar.outline.set_edgecolor('black')
-# cbar.outline.set_linewidth(1)
+# Create an inset axes for the color bar at the left middle of the plot
+cbar_axes = inset_axes(ax,
+                           width='1.5%',
+                           height='50%',
+                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+cbar.set_ticks([0, 1, 2, 3, 4], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=12)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
 
-plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_China.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_AnnualMean_Europe.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()

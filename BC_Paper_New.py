@@ -171,7 +171,8 @@ for mon in range(1, 13):
     # pw_conc = (pop * sim_conc) / np.nansum(pop)  # compute pw conc for each grid point, would be super small and not-meaningful
 
     # Load the Data
-    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN.xlsx', sheet_name='All')
+    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', sheet_name='All')
+    # obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/Summary_measurements_2019.xlsx')
     site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'),
                             usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
     # Filter obs_df based on 'start_month'
@@ -412,20 +413,20 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12])
-plt.ylim([-0.5, 12])
-plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
-plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.xlim([-0.5, 11])
+plt.ylim([-0.5, 11])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Perform linear regression for the first segment
-# mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
-mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
+mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
+# mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
 slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
 # Perform linear regression for the second segment
-# mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
+mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
+# mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
 slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
 # Plot regression lines
 sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
@@ -452,7 +453,7 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10_Singapore.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
 ################################################################################################
 # Create scatter plot: sim vs meas, color blue and red with only one line
@@ -656,7 +657,7 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202207_vs_C360_CEDS_noLUO_201907_MonMean.xlsx'))
+compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202201_vs_C360_CEDS_noLUO_201901.xlsx'))
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -779,10 +780,14 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 7])
-plt.ylim([-0.5, 7])
-plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+# plt.xlim([-0.5, 7])
+# plt.ylim([-0.5, 7])
+# plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
+# plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.xlim([-0.5, 17])
+plt.ylim([-0.5, 17])
+plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -808,7 +813,8 @@ plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}
 # Add the number of data points for each segment
 num_points = mask.sum()
 plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.78, 0.03, f'January', transform=scatterplot.transAxes, fontsize=18)
+# plt.text(0.88, 0.03, f'July', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
 plt.xlabel('C360 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -816,7 +822,7 @@ plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_201907.svg', dpi=300)
+# plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202201_vs_C360_CEDS_201901.svg', dpi=300)
 plt.show()
 ################################################################################################
 # Create scatter plot: noLUO vs LUO, colored by region
@@ -1064,7 +1070,7 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir + 'C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201907.xlsx'))
+compr_df = pd.read_excel(os.path.join(out_dir + 'C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201901.xlsx'))
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -1187,14 +1193,14 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 6])
-plt.ylim([-0.5, 6])
-plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
-# plt.xlim([-0.5, 7])
-# plt.ylim([-0.5, 7])
+# plt.xlim([-0.5, 6])
+# plt.ylim([-0.5, 6])
 # plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
 # plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.xlim([-0.5, 12])
+plt.ylim([-0.5, 12])
+plt.xticks([0, 4, 8, 12], fontname='Arial', size=18)
+plt.yticks([0, 4, 8, 12], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -1219,8 +1225,8 @@ plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}
 # Add the number of data points for each segment
 num_points = mask.sum()
 plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-# plt.text(0.65, 0.03, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
-plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.65, 0.03, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
+# plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
 plt.xlabel('GEOS-FP Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -1228,7 +1234,7 @@ plt.ylabel('MERRA2 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontna
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigSX_C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201907.svg', dpi=300)
+# plt.savefig(out_dir + 'FigS4_C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201901.svg', dpi=300)
 plt.show()
 
 ################################################################################################
