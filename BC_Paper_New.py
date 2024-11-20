@@ -22,7 +22,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 from scipy.io import loadmat
 import matplotlib.lines as mlines
-
+from scipy.stats import linregress
 cres = 'C360'
 year = 2019
 species = 'BC'
@@ -657,7 +657,7 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202201_vs_C360_CEDS_noLUO_201901.xlsx'))
+compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202207_vs_C360_CEDS_noLUO_202207.xlsx'))
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -780,21 +780,21 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-# plt.xlim([-0.5, 7])
-# plt.ylim([-0.5, 7])
-# plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
-# plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
-plt.xlim([-0.5, 17])
-plt.ylim([-0.5, 17])
-plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
-plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+plt.xlim([-0.5, 7])
+plt.ylim([-0.5, 7])
+plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+# plt.xlim([-0.5, 22])
+# plt.ylim([-0.5, 22])
+# plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+# plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Add 1:1 line with grey dash
 x = compr_df['c360']
 y = compr_df['c360']
-plt.plot([compr_df['c360'].min(), 17], [compr_df['c360'].min(), 17],
+plt.plot([compr_df['c360'].min(), 21], [compr_df['c360'].min(), 21],
          color='grey', linestyle='--', linewidth=1)
 
 # Perform linear regression for all segments
@@ -813,8 +813,8 @@ plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}
 # Add the number of data points for each segment
 num_points = mask.sum()
 plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-plt.text(0.78, 0.03, f'January', transform=scatterplot.transAxes, fontsize=18)
-# plt.text(0.88, 0.03, f'July', transform=scatterplot.transAxes, fontsize=18)
+# plt.text(0.78, 0.03, f'January', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.88, 0.03, f'July', transform=scatterplot.transAxes, fontsize=18)
 
 # Set labels
 plt.xlabel('C360 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -822,9 +822,8 @@ plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202201_vs_C360_CEDS_201901.svg', dpi=300)
-plt.show()
-################################################################################################
+# plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207.svg', dpi=300)
+plt.show()################################################################################################
 # Create scatter plot: noLUO vs LUO, colored by region
 ################################################################################################
 def get_city_index(city):
@@ -1948,3 +1947,21 @@ cbar.outline.set_linewidth(1)
 
 # plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
+
+################################################################################################
+# Regression for two datasets
+################################################################################################
+# Data for regression
+sim = [0.376899732, 0.382601509, 0.383543015, 0.21596839, 0.741094199, 0.385473877, 0.328784, 0.361103099, 0.311364786]
+obs = [0.408375207, 0.332918632, 0.433083415, 0.195503968, 0.793203662, 0.390808532, 0.391118408, 0.345428075, 0.221408084]
+
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = linregress(sim, obs)
+
+# Calculate R^2
+r_squared = r_value**2
+
+# Print results
+print("Slope:", slope)
+print("Intercept:", intercept)
+print("R-squared:", r_squared)
