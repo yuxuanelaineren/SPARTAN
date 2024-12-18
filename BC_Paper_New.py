@@ -553,6 +553,26 @@ for city in unique_cities:
         city_marker.append(marker)
         city_marker_match.append({'city': city, 'marker': marker})
 
+# # Print legend context (city name, color, marker)
+# city_palette = {city: map_city_to_color(city, compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0]) for city in sorted_cities}
+# city_marker = {city: map_city_to_marker(city) for city in sorted_cities}
+# print("Legend Context:")
+# for city in sorted_cities:
+#     print(f"City: {city}, Color: {city_palette[city]}, Marker: {city_marker[city]}")
+# # Function to convert RGBA to HEX
+# def rgba_to_hex(rgba):
+#     return '#{:02x}{:02x}{:02x}'.format(int(rgba[0] * 255), int(rgba[1] * 255), int(rgba[2] * 255))
+# # Convert the context to the desired dictionary format
+# city_legend = {
+#     city: {'color': rgba_to_hex(city_palette[city]), 'marker': city_marker[city]}
+#     for city in sorted_cities
+# }
+# # Print the resulting dictionary
+# print("city_legend = {")
+# for city, values in city_legend.items():
+#     print(f"    '{city}': {{'color': '{values['color']}', 'marker': '{values['marker']}'}}{','}")
+# print("}")
+
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
@@ -616,7 +636,339 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 plt.tight_layout()
 # plt.savefig(out_dir + 'Fig3b_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
+################################################################################################
+# Create scatter plot: c360 vs c720, colored by major Sim vs Meas plot (blue and red)
+################################################################################################
+# Read the file
+compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202207_vs_C360_CEDS_noLUO_202207.xlsx'))
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+# Define city-to-color and marker mappings
+city_legend = {
+    'Fajardo': {'color': '#b2c2e6', 'marker': 'd'},
+    'Halifax': {'color': '#91ace4', 'marker': 'd'},
+    'Sherbrooke': {'color': '#6e95ff', 'marker': 'd'},
+    'Melbourne': {'color': '#6a8af3', 'marker': '*'},
+    'Pasadena': {'color': '#6680e6', 'marker': 'd'},
+    'Ulsan': {'color': '#325fcf', 'marker': '^'},
+    'Taipei': {'color': '#0044cc', 'marker': '^'},
+    'Haifa': {'color': '#0021e6', 'marker': 'p'},
+    'Rehovot': {'color': '#0000ff', 'marker': 'p'},
+    'Seoul': {'color': '#0000cc', 'marker': '^'},
+    'Kaohsiung': {'color': '#000099', 'marker': '^'},
+    'Beijing': {'color': '#e68080', 'marker': '^'},
+    'Mexico City': {'color': '#ef8686', 'marker': 'd'},
+    'Pretoria': {'color': '#fa7070', 'marker': 'o'},
+    'Johannesburg': {'color': '#ff5252', 'marker': 'o'},
+    'Abu Dhabi': {'color': '#ff2929', 'marker': 'p'},
+    'Ilorin': {'color': '#fd0000', 'marker': 'o'},
+    'Bandung': {'color': '#eb0000', 'marker': 's'},
+    'Bujumbura': {'color': '#d60000', 'marker': 'o'},
+    'Kanpur': {'color': '#bc0000', 'marker': 's'},
+    'Addis Ababa': {'color': '#9d0000', 'marker': 'o'},
+    'Dhaka': {'color': '#800000', 'marker': 's'},
+}
 
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 22], [-0.5, 22], color='grey', linestyle='--', linewidth=1, zorder=1)
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(
+    x='c360',
+    y='c720',
+    data=compr_df,
+    hue='city',
+    palette={city: city_legend[city]['color'] for city in city_legend},
+    style='city',
+    markers={city: city_legend[city]['marker'] for city in city_legend},
+    s=80,
+    alpha=1,
+    edgecolor='k'
+)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Customize legend to match the order and appearance
+handles, labels = ax.get_legend_handles_labels()
+ordered_handles = [handles[labels.index(city)] for city in city_legend if city in labels]
+ordered_labels = [city for city in city_legend if city in labels]
+legend = plt.legend(ordered_handles, ordered_labels, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([-0.5, 4.5])
+plt.ylim([-0.5, 4.5])
+plt.xticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
+plt.yticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
+# plt.xlim([-0.5, 22])
+# plt.ylim([-0.5, 22])
+# plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+# plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['c360'][mask], compr_df['c720'][mask])
+# Plot regression lines
+sns.regplot(x='c360', y='c720', data=compr_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.65, 0.03, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
+
+# Set labels
+plt.xlabel('C360 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'FigS7_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207_BlueRed.svg', dpi=300)
+plt.show()
+################################################################################################
+# Create scatter plot: noLUO vs LUO, colored by major Sim vs Meas plot (blue and red)
+################################################################################################
+# Read the file
+compr_df = pd.read_excel(os.path.join(out_dir + 'C360_CEDS_LUO_vs_C360_CEDS_noLUO_201907.xlsx'))
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+# Define city-to-color and marker mappings
+city_legend = {
+    'Fajardo': {'color': '#b2c2e6', 'marker': 'd'},
+    'Halifax': {'color': '#91ace4', 'marker': 'd'},
+    'Sherbrooke': {'color': '#6e95ff', 'marker': 'd'},
+    'Melbourne': {'color': '#6a8af3', 'marker': '*'},
+    'Pasadena': {'color': '#6680e6', 'marker': 'd'},
+    'Ulsan': {'color': '#325fcf', 'marker': '^'},
+    'Taipei': {'color': '#0044cc', 'marker': '^'},
+    'Haifa': {'color': '#0021e6', 'marker': 'p'},
+    'Rehovot': {'color': '#0000ff', 'marker': 'p'},
+    'Seoul': {'color': '#0000cc', 'marker': '^'},
+    'Kaohsiung': {'color': '#000099', 'marker': '^'},
+    'Beijing': {'color': '#e68080', 'marker': '^'},
+    'Mexico City': {'color': '#ef8686', 'marker': 'd'},
+    'Pretoria': {'color': '#fa7070', 'marker': 'o'},
+    'Johannesburg': {'color': '#ff5252', 'marker': 'o'},
+    'Abu Dhabi': {'color': '#ff2929', 'marker': 'p'},
+    'Ilorin': {'color': '#fd0000', 'marker': 'o'},
+    'Bandung': {'color': '#eb0000', 'marker': 's'},
+    'Bujumbura': {'color': '#d60000', 'marker': 'o'},
+    'Kanpur': {'color': '#bc0000', 'marker': 's'},
+    'Addis Ababa': {'color': '#9d0000', 'marker': 'o'},
+    'Dhaka': {'color': '#800000', 'marker': 's'},
+}
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 22], [-0.5, 22], color='grey', linestyle='--', linewidth=1, zorder=1)
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(
+    x='noLUO',
+    y='LUO',
+    data=compr_df,
+    hue='city',
+    palette={city: city_legend[city]['color'] for city in city_legend},
+    style='city',
+    markers={city: city_legend[city]['marker'] for city in city_legend},
+    s=80,
+    alpha=1,
+    edgecolor='k'
+)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Customize legend to match the order and appearance
+handles, labels = ax.get_legend_handles_labels()
+ordered_handles = [handles[labels.index(city)] for city in city_legend if city in labels]
+ordered_labels = [city for city in city_legend if city in labels]
+legend = plt.legend(ordered_handles, ordered_labels, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([-0.5, 7])
+plt.ylim([-0.5, 7])
+plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+# plt.xlim([-0.5, 17])
+# plt.ylim([-0.5, 17])
+# plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+# plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['noLUO'][mask], compr_df['LUO'][mask])
+# Plot regression lines
+sns.regplot(x='noLUO', y='LUO', data=compr_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.65, 0.03, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
+
+# Set labels
+plt.xlabel('BC with Default Scavenging (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('BC with Alternative Scavenging (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'FigS4_Scatter_C360_CEDS_LUO_vs_C360_CEDS_noLUO_201907_BlueRed.svg', dpi=300)
+plt.show()
+################################################################################################
+# Create scatter plot: GEOS-FP vs MERRA2, colored by major Sim vs Meas plot (blue and red)
+################################################################################################
+# Read the file
+compr_df = pd.read_excel(os.path.join(out_dir + 'C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201907.xlsx'))
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+# Define city-to-color and marker mappings
+city_legend = {
+    'Fajardo': {'color': '#b2c2e6', 'marker': 'd'},
+    'Halifax': {'color': '#91ace4', 'marker': 'd'},
+    'Sherbrooke': {'color': '#6e95ff', 'marker': 'd'},
+    'Melbourne': {'color': '#6a8af3', 'marker': '*'},
+    'Pasadena': {'color': '#6680e6', 'marker': 'd'},
+    'Ulsan': {'color': '#325fcf', 'marker': '^'},
+    'Taipei': {'color': '#0044cc', 'marker': '^'},
+    'Haifa': {'color': '#0021e6', 'marker': 'p'},
+    'Rehovot': {'color': '#0000ff', 'marker': 'p'},
+    'Seoul': {'color': '#0000cc', 'marker': '^'},
+    'Kaohsiung': {'color': '#000099', 'marker': '^'},
+    'Beijing': {'color': '#e68080', 'marker': '^'},
+    'Mexico City': {'color': '#ef8686', 'marker': 'd'},
+    'Pretoria': {'color': '#fa7070', 'marker': 'o'},
+    'Johannesburg': {'color': '#ff5252', 'marker': 'o'},
+    'Abu Dhabi': {'color': '#ff2929', 'marker': 'p'},
+    'Ilorin': {'color': '#fd0000', 'marker': 'o'},
+    'Bandung': {'color': '#eb0000', 'marker': 's'},
+    'Bujumbura': {'color': '#d60000', 'marker': 'o'},
+    'Kanpur': {'color': '#bc0000', 'marker': 's'},
+    'Addis Ababa': {'color': '#9d0000', 'marker': 'o'},
+    'Dhaka': {'color': '#800000', 'marker': 's'},
+}
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 22], [-0.5, 22], color='grey', linestyle='--', linewidth=1, zorder=1)
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(
+    x='GEOS-FP',
+    y='MERRA2',
+    data=compr_df,
+    hue='city',
+    palette={city: city_legend[city]['color'] for city in city_legend},
+    style='city',
+    markers={city: city_legend[city]['marker'] for city in city_legend},
+    s=80,
+    alpha=1,
+    edgecolor='k'
+)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Customize legend to match the order and appearance
+handles, labels = ax.get_legend_handles_labels()
+ordered_handles = [handles[labels.index(city)] for city in city_legend if city in labels]
+ordered_labels = [city for city in city_legend if city in labels]
+legend = plt.legend(ordered_handles, ordered_labels, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([-0.5, 5])
+plt.ylim([-0.5, 5])
+plt.xticks([0, 1, 2, 3, 4, 5], fontname='Arial', size=18)
+plt.yticks([0, 1, 2, 3, 4, 5], fontname='Arial', size=18)
+# plt.xlim([-0.5, 12])
+# plt.ylim([-0.5, 12])
+# plt.xticks([0, 4, 8, 12], fontname='Arial', size=18)
+# plt.yticks([0, 4, 8, 12], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['GEOS-FP'][mask], compr_df['MERRA2'][mask])
+# Plot regression lines
+sns.regplot(x='GEOS-FP', y='MERRA2', data=compr_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
+
+# Add the number of data points for each segment
+num_points = mask.sum()
+plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
+# plt.text(0.65, 0.03, f'January, {year}', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.75, 0.03, f'July, {year}', transform=scatterplot.transAxes, fontsize=18)
+
+# Set labels
+plt.xlabel('GEOS-FP Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('MERRA-2 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'FigS3_C180_CEDS_noLUO_MERRA2_vs_GEOS-FP_201907_BlueRed.svg', dpi=300)
+plt.show()
 ################################################################################################
 # Create scatter plot: c360 vs c720, colored by region
 ################################################################################################
@@ -780,10 +1132,10 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 7])
-plt.ylim([-0.5, 7])
-plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.xlim([-0.5, 4.5])
+plt.ylim([-0.5, 4.5])
+plt.xticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
+plt.yticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
 # plt.xlim([-0.5, 22])
 # plt.ylim([-0.5, 22])
 # plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
@@ -794,7 +1146,7 @@ scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 # Add 1:1 line with grey dash
 x = compr_df['c360']
 y = compr_df['c360']
-plt.plot([compr_df['c360'].min(), 21], [compr_df['c360'].min(), 21],
+plt.plot([compr_df['c360'].min(), 22], [compr_df['c360'].min(), 22],
          color='grey', linestyle='--', linewidth=1)
 
 # Perform linear regression for all segments
@@ -823,7 +1175,8 @@ plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname
 # Show the plot
 plt.tight_layout()
 # plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207.svg', dpi=300)
-plt.show()################################################################################################
+plt.show()
+################################################################################################
 # Create scatter plot: noLUO vs LUO, colored by region
 ################################################################################################
 def get_city_index(city):
@@ -1965,3 +2318,57 @@ r_squared = r_value**2
 print("Slope:", slope)
 print("Intercept:", intercept)
 print("R-squared:", r_squared)
+################################################################################################
+# NMD and HMB for two datasets
+################################################################################################
+# Data
+data = {
+    "country": [
+        "Australia", "Bangladesh", "Burundi", "Canada", "Canada", "China",
+        "Ethiopia", "India", "Indonesia", "Israel", "Israel", "Korea",
+        "Korea", "Mexico", "Nigeria", "PuertoRico", "South Africa",
+        "South Africa", "Taiwan", "Taiwan", "UAE", "United States"
+    ],
+    "city": [
+        "Melbourne", "Dhaka", "Bujumbura", "Halifax", "Sherbrooke", "Beijing",
+        "Addis Ababa", "Kanpur", "Bandung", "Haifa", "Rehovot", "Seoul",
+        "Ulsan", "Mexico City", "Ilorin", "Fajardo", "Johannesburg",
+        "Pretoria", "Kaohsiung", "Taipei", "Abu Dhabi", "Pasadena"
+    ],
+    "sim": [
+        0.512084121, 1.381082952, 2.547637429, 0.119816458, 0.18294857,
+        10.37717696, 1.506690711, 2.693194926, 3.824371427, 1.283611243,
+        2.110184163, 2.529543539, 0.956247906, 1.183777294, 1.440186777,
+        0.019938074, 2.582517068, 2.000795275, 2.171044756, 3.038679928,
+        1.674753805, 0.749298334
+    ],
+    "obs": [
+        0.431163175, 5.56315254, 3.673715311, 0.23148047, 0.363877719,
+        1.398329746, 4.799646778, 3.833072212, 3.663149692, 0.845562015,
+        1.159011749, 1.196440665, 0.7798648, 2.073496912, 2.982349549,
+        0.10684992, 2.381180572, 2.098747274, 1.33695288, 0.830166517,
+        2.673810294, 0.474454487
+    ]
+}
+
+# Create a DataFrame
+df = pd.DataFrame(data)
+
+# # Calculate NMB and NMD
+# total_sim_minus_obs = (df["sim"] - df["obs"]).sum()
+# total_abs_sim_minus_obs = (df["sim"] - df["obs"]).abs().sum()
+# total_obs = df["obs"].sum()
+
+# Select the 11 sites with the highest observed values
+top_11_obs = df.nlargest(10, "obs")
+# Calculate NMB and NMD for the filtered data
+total_sim_minus_obs = (top_11_obs["sim"] - top_11_obs["obs"]).sum()
+total_abs_sim_minus_obs = (top_11_obs["sim"] - top_11_obs["obs"]).abs().sum()
+total_obs = top_11_obs["obs"].sum()
+
+nmb_percentage = (total_sim_minus_obs / total_obs) * 100
+nmd_percentage = (total_abs_sim_minus_obs / total_obs) * 100
+
+# Print results
+print(f"Normalized Mean Bias (NMB): {nmb_percentage:.2f}%")
+print(f"Normalized Mean Difference (NMD): {nmd_percentage:.2f}%")

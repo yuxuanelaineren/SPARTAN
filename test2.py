@@ -205,10 +205,10 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 7])
-plt.ylim([-0.5, 7])
-plt.xticks([0, 2, 4, 6], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6], fontname='Arial', size=18)
+plt.xlim([-0.5, 4.5])
+plt.ylim([-0.5, 4.5])
+plt.xticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
+plt.yticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
 # plt.xlim([-0.5, 22])
 # plt.ylim([-0.5, 22])
 # plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
@@ -219,7 +219,7 @@ scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 # Add 1:1 line with grey dash
 x = compr_df['c360']
 y = compr_df['c360']
-plt.plot([compr_df['c360'].min(), 21], [compr_df['c360'].min(), 21],
+plt.plot([compr_df['c360'].min(), 22], [compr_df['c360'].min(), 22],
          color='grey', linestyle='--', linewidth=1)
 
 # Perform linear regression for all segments
@@ -247,7 +247,7 @@ plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207.svg', dpi=300)
+plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207.svg', dpi=300)
 plt.show()
 
 
