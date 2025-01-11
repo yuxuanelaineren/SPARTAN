@@ -23,8 +23,8 @@ import matplotlib.colors as mcolors
 from scipy.io import loadmat
 import matplotlib.lines as mlines
 
-cres = 'C720'
-year = 2022
+cres = 'C360'
+year = 2019
 species = 'BC'
 inventory = 'CEDS'
 deposition = 'noLUO'
@@ -41,213 +41,184 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 
-
 ################################################################################################
-# Create scatter plot: c360 vs c720, colored by region
+# Combine UV-Vis BC, FT-IR EC, and GCHP dataset based on lat/lon
 ################################################################################################
-def get_city_index(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return cities.index(city)
-    return float('inf')
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
-def map_city_to_color(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_color = region_colors[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Color: {assigned_color}")
-            return assigned_color
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_marker = region_markers[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
-            return assigned_marker
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            city_index = cities.index(city)
-            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
-            return assigned_marker
-    return None
-# Read the file
-compr_df = pd.read_excel(os.path.join(out_dir + 'C720_CEDS_noLUO_202207_vs_C360_CEDS_noLUO_202207.xlsx'))
+# Function to find matching rows and add 'Country' and 'City'
+def find_and_add_location(lat, lon):
+    for index, row in site_df.iterrows():
+        if abs(row['Latitude'] - lat) <= 0.3 and abs(row['Longitude'] - lon) <= 0.3:
+            return row['Country'], row['City']
+    return None, None
 
-# Print the names of each city
-unique_cities = compr_df['city'].unique()
-for city in unique_cities:
-    print(f"City: {city}")
+# Create empty lists to store data for each month
+monthly_data = []
+for mon in range(1, 13):
+    sim_df = xr.open_dataset(
+        sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon),
+        engine='netcdf4')  # CEDS, c360, noLUO
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.EDGARv61-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') # EDGAR, noLUO
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.HTAPv3-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') # HTAP, noLUO
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.GEOSFP-CSwinds.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c720, noLUO
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.GEOSFP.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c360, LUO
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.{}.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, meteorology, year, mon), engine='netcdf4') # CEDS, c180, noLUO, GEOS-FP
+    # sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.{}.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, meteorology, year, mon), engine='netcdf4')  # CEDS, c180, noLUO, MERRA2
+    # Extract nf, Ydim, Xdim, lon/lat, buffer, and BC from simulation data
+    nf = np.array(sim_df.nf)
+    Ydim = np.array(sim_df.Ydim)
+    Xdim = np.array(sim_df.Xdim)
+    sim_lon = np.array(sim_df.lons).astype('float32')
+    sim_lon[sim_lon > 180] -= 360
+    sim_lat = np.array(sim_df.lats).astype('float32')
+    # sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    print(np.array(sim_df[species]).shape)
+    sim_conc = np.array(sim_df[species])[0, :, :, :]  # Selecting the first level
+    # sim_conc = np.array(sim_df[species]).reshape([6, 360, 360])
+    # pw_conc = (pop * sim_conc) / np.nansum(pop)  # compute pw conc for each grid point, would be super small and not-meaningful
 
-# Classify 'city' based on 'region'
-region_mapping = {
-    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
-    'Australia': ['Melbourne'],
-    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
-    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
-    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
-    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
-    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
-}
-region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
+    # Load the Data
+    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_UV-Vis_SPARTAN/BC_UV-Vis_SPARTAN_Joshin_20230510.xlsx',
+                           usecols=['Filter ID', 'Sampling Start Date', 'f_BC', 'Mass_BC(ug/m3)', 'Location ID'])
+    site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Site_Code', 'Country', 'City', 'Latitude', 'Longitude'])
 
-# Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
-region_colors = {
-    'North America': [
-        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
-    ],  # Blue shades
-    'Central Asia': [
-        (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
-    ],  # Purple shades
-    'Australia': [
-        (0.6, 0.4, 0.2)
-    ],  # Brown
-    'East Asia': [
-        (0, 0.5, 0), (0, 0.8, 0), (0, 1, 0), (0.56, 0.93, 0.56), (0.8, 0.9, 0.8)
-    ],  # Green shades
-    'South Asia': [
-        (0.5, 0, 0), (0.8, 0, 0), (1, 0, 0), (1, 0.4, 0.4), (0.9, 0.6, 0.6)
-    ],  # Red shades
-    'Africa': [
-        (1, 0.4, 0), (1, 0.6, 0.14), (1, 0.63, 0.48), (1, 0.85, 0.73), (1, 0.96, 0.85)
-    ], # Orange shades
-    'South America': [
-        (1, 0.16, 0.827), (1, 0.42, 0.70), (0.8, 0.52, 0.7), (0.961, 0.643, 0.804), (1, 0.64, 0.64), (1, 0.76, 0.48)
-    ]  # Pink shades
-}
+    # Drop the last two digits in the 'Filter ID' column: 'AEAZ-0113-1' to 'AEAZ-0113'
+    obs_df['FilterID'] = obs_df['Filter ID'].str[:-2]
+    excluded_filters = [
+        'AEAZ-0078', 'AEAZ-0086', 'AEAZ-0089', 'AEAZ-0090', 'AEAZ-0093', 'AEAZ-0097',
+        'AEAZ-0106', 'AEAZ-0114', 'AEAZ-0115', 'AEAZ-0116', 'AEAZ-0141', 'AEAZ-0142',
+        'BDDU-0346', 'BDDU-0347', 'BDDU-0349', 'BDDU-0350', 'MXMC-0006', 'NGIL-0309'
+    ]
+    # UV-Vis
+    # Exclude specific FilterID values
+    obs_df = obs_df[~obs_df['FilterID'].isin(excluded_filters)]
+    obs_df.rename(columns={'Location ID': 'Site'}, inplace=True)
+    obs_df.rename(columns={'Mass_BC(ug/m3)': 'BC'}, inplace=True)
+    # Drop rows where fraction of UV-Vis BC > 0.8
+    obs_df = obs_df.loc[obs_df['f_BC'] < 0.8]
+    # Drop NaN and infinite values from UV-Vis BC concentrations
+    obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
+    obs_df = obs_df.dropna(subset=[species], thresh=1)
 
-# Create an empty list to store the city_palette for each city
-city_palette = []
-city_color_match = []
-# Iterate over each unique city and map it to a gradient
-for city in unique_cities:
-    city_color = map_city_to_color(city)
-    if city_color is not None:
-        city_palette.append(city_color)
-        city_color_match.append({'city': city, 'color': city_color})  # Store both city name and color
-print("City Palette:", city_palette)
+    # Extract the start_year and start_month from 'Sampling Start Date' column with the format 'YYYY/M/D'
+    obs_df['start_year'] = pd.to_datetime(obs_df['Sampling Start Date']).dt.year
+    obs_df['start_month'] = pd.to_datetime(obs_df['Sampling Start Date']).dt.month
+    obs_df = obs_df[obs_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
+    obs_df = obs_df[obs_df['start_month'] == mon]
+    # Merge 'Country', 'City', 'Latitude', 'Longitude' into obs_df based on 'Site'
+    obs_df = obs_df.merge(site_df, how='left', left_on='Site', right_on='Site_Code')
 
-# Define custom palette for each region with 5 shades for each color
-# markers = ['o', 's', '^', 'v', '<', '>', 'D', '*', 'H', '+', 'x', 'P', 'p', 'X', '1', '2', '3', '4']
-# ['o', 'H', 'p', 's', '^', 'P']
-region_markers = {
-    'North America': ['o', '^', 's', 'p', 'H', '*'],
-    'Australia': ['o', '^', 's', 'p', 'H', '*'],
-    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Africa': ['o', '^', 's', 'p', 'H', '*'],
-    'South America': ['o', '^', 's', 'p', 'H', '*'],
-}
+    # # FT-IR
+    # # Exclude specific FilterID values
+    # obs_df = obs_df[~obs_df['FilterID'].isin(excluded_filters)]
+    # obs_df.rename(columns={'EC_FTIR_ug/m3_raw': 'BC'}, inplace=True)
+    # # Drop NaN and infinite values from UV-Vis BC concentrations
+    # obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
+    # obs_df = obs_df.dropna(subset=[species], thresh=1)
+    # obs_df = obs_df[obs_df['start_year'].isin([2019, 2020, 2021, 2022, 2023])]
+    # obs_df = obs_df[obs_df['start_month'] == mon]
 
-# Create an empty list to store the city_marker for each city
-city_marker = []
-city_marker_match = []
+    # Extract lon/lat and BC from obs
+    obs_lon = obs_df['Longitude']
+    obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
+    obs_lat = obs_df['Latitude']
+    obs_conc = obs_df[species]
 
-# Iterate over each unique city and map it to a marker
-for city in unique_cities:
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        city_marker.append(marker)
-        city_marker_match.append({'city': city, 'marker': marker})
+    # Find the nearest simulation lat/lon neighbors for each observation
+    match_obs_lon = np.zeros(len(obs_lon))
+    match_obs_lat = np.zeros(len(obs_lon))
+    match_obs = np.zeros(len(obs_lon))
+    match_sim_lon = np.zeros(len(obs_lon))
+    match_sim_lat = np.zeros(len(obs_lon))
+    match_sim = np.zeros(len(obs_lon))
+    # Calculate distance between the observation and all simulation points
+    for k in range(len(obs_lon)):
+        # Spherical law of cosines:
+        R = 6371  # Earth radius 6371 km
+        buffer = 10  # 10-degree radius
+        latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
+        lonk = obs_lon.iloc[k]
+        # Select simulation points within a buffer around the observation's lat/lon
+        ind = np.where((sim_lon > lonk - buffer) & (sim_lon < lonk + buffer)
+                       & (sim_lat > latk - buffer) & (sim_lat < latk + buffer))
+        # Extract relevant simulation data
+        sim_lonk = sim_lon[ind]
+        sim_latk = sim_lat[ind]
+        sim_conck = sim_conc[ind]
+        # Calculate distance between the observation and selected simulation points
+        dd = np.arccos(np.sin(latk * np.pi / 180) * np.sin(sim_latk * np.pi / 180) + \
+                       np.cos(latk * np.pi / 180) * np.cos(sim_latk * np.pi / 180) * np.cos(
+            (sim_lonk - lonk) * np.pi / 180)) * R
+        ddmin = np.nanmin(dd)
+        ii = np.where(dd == ddmin)
+        # Use iloc to access the element by integer position
+        match_obs[k] = obs_conc.iloc[k]
+        match_sim[k] = np.nanmean(sim_conck[ii])
+        match_sim_lat[k] = np.nanmean(sim_latk[ii])
+        match_sim_lon[k] = np.nanmean(sim_lonk[ii])
+    # Get unique lat/lon and average observation data at the same simulation box
+    coords = np.concatenate((match_sim_lat[:, None], match_sim_lon[:, None]), axis=1)
+    coords_u, ind, ct = np.unique(coords, return_index=True, return_counts=True, axis=0)
+    match_lon_u = match_sim_lon[ind]
+    match_lat_u = match_sim_lat[ind]
+    match_sim_u = match_sim[ind]
+    # Calculate the monthly average observation data for each unique simulation box
+    match_obs_u = np.zeros(len(ct))
+    for i in range(len(ct)):
+        irow = np.where((coords == coords_u[i]).all(axis=1))
+        match_obs_u[i] = np.nanmean(match_obs[irow])
+    # Drop rows with NaN values from the final data
+    nanindex = np.argwhere(
+        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_obs_u))).squeeze()
+    match_lon_u = np.delete(match_lon_u, nanindex)
+    match_lat_u = np.delete(match_lat_u, nanindex)
+    match_sim_u = np.delete(match_sim_u, nanindex)
+    match_obs_u = np.delete(match_obs_u, nanindex)
 
-print("City Marker:", city_marker)
+    # Create DataFrame for current month
+    columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
+    compr_data = np.concatenate(
+        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], ct[:, None]), axis=1)
+    compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
+    # Add a 'month' column to the DataFrame
+    compr_df['month'] = mon
+    # Apply the function to 'compr_df' and create new columns
+    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
+                                                   result_type='expand')
+    print(compr_df)
 
-# Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 1.35]
-x_range_2 = [1.35, compr_df['obs'].max()]
-x_range = [compr_df['obs'].min(), compr_df['obs'].max()]
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+    # Save monthly CSV file
+    # outfile = os.path.join(out_dir, '{}_{}_{}_Sim_vs_SPARTAN_{}_{}{:02d}_MonMean.csv'.format(cres, inventory, deposition, species, year, mon))
+    # compr_df.to_csv(outfile, index=False)  # Set index=False to avoid writing row indices to the CSV file
 
-# Create scatter plot with white background, black border, and no grid
-sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='c360', y='c720', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city',  markers=city_marker)
-scatterplot.set_facecolor('white')  # set background color to white
-border_width = 1
-for spine in scatterplot.spines.values():
-    spine.set_edgecolor('black')  # set border color to black
-    spine.set_linewidth(border_width)  # set border width
-scatterplot.grid(False)  # remove the grid
+    # Append data to the monthly_data list
+    monthly_data.append(compr_df)
 
-# Sort the unique_cities list based on their appearance in region_mapping
-unique_cities_sorted = sorted(unique_cities, key=get_city_index)
+    # Calculate mean, sd, and max for simulated and observed concentrations
+    mean_sim = np.nanmean(match_sim_u)
+    sd_sim = np.nanstd(match_sim_u)
+    max_sim = np.nanmax(match_sim_u)
+    mean_obs = np.nanmean(match_obs_u)
+    sd_obs = np.nanstd(match_obs_u)
+    max_obs = np.nanmax(match_obs_u)
+    # Print the results
+    print(f'Simulated_{species}_in_{mon} Mean: {mean_sim:.2f}, SD: {sd_sim:.2f}, Max: {max_sim:.2f}')
+    print(f'Measured_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
 
-# Create legend with custom order
-sorted_city_color_match = sorted(city_color_match, key=lambda x: (
-    list(region_mapping.keys()).index(get_region_for_city(x['city'])),
-    region_mapping[get_region_for_city(x['city'])].index(x['city'])
-))
+# Combine monthly data to create the annual DataFrame
+monthly_df = pd.concat(monthly_data, ignore_index=True)
+monthly_df['month'] = monthly_df['month'].astype(int)
+# Calculate annual average and standard error for each site
+annual_df = monthly_df.groupby(['country', 'city']).agg({
+    'sim': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
+    'obs': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
+    'num_obs': 'sum',
+    'lat': 'mean',
+    'lon': 'mean'
+}).reset_index()
+annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
 
-# Create legend handles with both color and marker for each city
-legend_handles = []
-for city_info in sorted_city_color_match:
-    city = city_info['city']
-    color = city_info['color']
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        handle = plt.Line2D([0], [0], marker=marker, color=color, linestyle='', markersize=8, label=city)
-        legend_handles.append(handle)
+with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_UV-Vis_{}_{}.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
+    monthly_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_df.to_excel(writer, sheet_name='Annual', index=False)
 
-# Create legend with custom handles
-legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
-legend.get_frame().set_edgecolor('black')
-
-# Set title, xlim, ylim, ticks, labels
-# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 4.5])
-plt.ylim([-0.5, 4.5])
-plt.xticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
-plt.yticks([0, 1, 2, 3, 4], fontname='Arial', size=18)
-# plt.xlim([-0.5, 22])
-# plt.ylim([-0.5, 22])
-# plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-# plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
-
-# Add 1:1 line with grey dash
-x = compr_df['c360']
-y = compr_df['c360']
-plt.plot([compr_df['c360'].min(), 22], [compr_df['c360'].min(), 22],
-         color='grey', linestyle='--', linewidth=1)
-
-# Perform linear regression for all segments
-mask = (compr_df['obs'] >= x_range[0]) & (compr_df['obs'] <= x_range[1])
-slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['c360'][mask], compr_df['c720'][mask])
-# Plot regression lines
-sns.regplot(x='c360', y='c720', data=compr_df[mask],
-            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-
-# Add text with linear regression equations and other statistics
-intercept_display = abs(intercept)
-intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.05, 0.66, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='black')
-
-# Add the number of data points for each segment
-num_points = mask.sum()
-plt.text(0.05, 0.6, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-# plt.text(0.78, 0.03, f'January', transform=scatterplot.transAxes, fontsize=18)
-plt.text(0.88, 0.03, f'July', transform=scatterplot.transAxes, fontsize=18)
-
-# Set labels
-plt.xlabel('C360 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('C720 Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-
-# Show the plot
-plt.tight_layout()
-plt.savefig(out_dir + 'FigS1_Scatter_C720_CEDS_202207_vs_C360_CEDS_202207.svg', dpi=300)
-plt.show()
-
-
+sim_df.close()

@@ -49,9 +49,11 @@ otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurem
 # Create scatter plot: sim vs meas, color blue and red with two lines
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_UV-Vis_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 compr_df['obs'] = 1 * compr_df['obs']
 compr_df['obs_se'] = 1 * compr_df['obs_se']
+# Exclude the city 'Delhi' from compr_df
+compr_df = compr_df[compr_df['city'] != 'Delhi']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -59,8 +61,8 @@ for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g,
-x_range_2 = [1.35*1, compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 3*1] # 1.3 for FT-IR,
+x_range_2 = [3*1, compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
@@ -145,31 +147,11 @@ for city in unique_cities:
         city_marker.append(marker)
         city_marker_match.append({'city': city, 'marker': marker})
 
-# # Print legend context (city name, color, marker)
-# city_palette = {city: map_city_to_color(city, compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0]) for city in sorted_cities}
-# city_marker = {city: map_city_to_marker(city) for city in sorted_cities}
-# print("Legend Context:")
-# for city in sorted_cities:
-#     print(f"City: {city}, Color: {city_palette[city]}, Marker: {city_marker[city]}")
-# # Function to convert RGBA to HEX
-# def rgba_to_hex(rgba):
-#     return '#{:02x}{:02x}{:02x}'.format(int(rgba[0] * 255), int(rgba[1] * 255), int(rgba[2] * 255))
-# # Convert the context to the desired dictionary format
-# city_legend = {
-#     city: {'color': rgba_to_hex(city_palette[city]), 'marker': city_marker[city]}
-#     for city in sorted_cities
-# }
-# # Print the resulting dictionary
-# print("city_legend = {")
-# for city, values in city_legend.items():
-#     print(f"    '{city}': {{'color': '{values['color']}', 'marker': '{values['marker']}'}}{','}")
-# print("}")
-
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
 # Add 1:1 line with grey dash
-plt.plot([-0.5, 6.2], [-0.5, 6.2], color='grey', linestyle='--', linewidth=1, zorder=1)
+plt.plot([-0.5, 6.9], [-0.5, 6.9], color='grey', linestyle='--', linewidth=1, zorder=1)
 # # Add error bars
 # for i in range(len(compr_df)):
 #     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
@@ -193,10 +175,14 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 11])
-plt.ylim([-0.5, 11])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.xlim([-0.5, 12])
+plt.ylim([-0.5, 12])
+plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
+# plt.xlim([-0.5, 11])
+# plt.ylim([-0.5, 11])
+# plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+# plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -228,17 +214,10 @@ num_points_2 = mask_2.sum()
 plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
 # Set labels
-plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('UV-Vis Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-
-# Print the legend information for each city
-legend_info = []
-for city, color, marker in zip(sorted_cities, city_palette, city_marker):
-    color_hex = mcolors.to_hex(color)  # Convert color to hex format
-    legend_info.append({'City': city, 'Color': color_hex, 'Marker': marker})
-    print(f"City: {city}, Color: {color_hex}, Marker: {marker}")
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'FigSX_Scatter_{}_{}_{}_vs_UV-Vis_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
