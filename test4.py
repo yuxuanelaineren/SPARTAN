@@ -175,8 +175,8 @@ legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 12])
-plt.ylim([-0.5, 12])
+plt.xlim([-0.5, 13])
+plt.ylim([-0.5, 13])
 plt.xticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 plt.yticks([0, 3, 6, 9, 12], fontname='Arial', size=18)
 # plt.xlim([-0.5, 11])
@@ -219,5 +219,5 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'FigSX_Scatter_{}_{}_{}_vs_UV-Vis_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig(out_dir + 'FigSX_Scatter_{}_{}_{}_vs_UV-Vis_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()

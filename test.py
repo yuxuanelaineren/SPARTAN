@@ -177,7 +177,7 @@ legend.get_frame().set_edgecolor('black')
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
 plt.xlim([-0.5, 11])
 plt.ylim([-0.5, 11])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.xticks([0, 3, 6, 6, 8, 10], fontname='Arial', size=18)
 plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
