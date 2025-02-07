@@ -44,7 +44,7 @@ otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurem
 # Create scatter plot: sim vs meas, color blue and red with two lines
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 compr_df['obs'] = 1 * compr_df['obs'] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
 compr_df['obs_se'] = 1 * compr_df['obs_se']
 
@@ -55,7 +55,7 @@ for city in unique_cities:
 
 # Define the range of x-values for the two segments
 x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-x_range_2 = [1.35*1, compr_df['obs'].max()]
+x_range_2 = [1.4*1, compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]

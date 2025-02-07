@@ -22,6 +22,9 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 from scipy.io import loadmat
 import matplotlib.lines as mlines
+from matplotlib.lines import Line2D
+from matplotlib.patches import Circle
+from matplotlib.patches import Polygon
 
 cres = 'C360'
 year = 2019
@@ -59,7 +62,7 @@ for city in unique_cities:
 x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
 x_range_1_high = [compr_df['obs_high'].min(), 1.35*(10 / 7)] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
 x_range_1_low = [compr_df['obs_low'].min(), 1.35*(10 / 13)] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-x_range_2 = [1.35*1, compr_df['obs'].max()]
+x_range_2 = [1.4*1, compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
@@ -70,7 +73,9 @@ red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
 
 # Create a custom color palette mapping each city to a color based on observed values
 def map_city_to_color(city, obs):
-    if x_range_1[0] <= obs <= x_range_1[1]:
+    if city == 'Beijing':  # Mark Beijing grey
+        return 'grey'
+    elif x_range_1[0] <= obs <= x_range_1[1]:
         index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
         obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
         return blue_cmap(obs_index)
@@ -137,6 +142,15 @@ def map_city_to_marker(city):
                 return 'o'  # Default marker style
     print(f"City not found in any region: {city}")
     return 'o'
+
+def draw_hatched_marker(ax, x, y, **kwargs):
+    # Define the coordinates for the triangle (example points)
+    triangle_coords = [(x, y + 0.1), (x - 0.1, y - 0.1), (x + 0.1, y - 0.1)]
+    # Create a triangle with edge color 'black' and hatch pattern
+    triangle = Polygon(triangle_coords, edgecolor='black', facecolor='white', hatch='/', **kwargs)
+    # Add the triangle with hatching to the axes
+    ax.add_patch(triangle)
+
 # Iterate over each unique city and map it to a marker
 for city in unique_cities:
     marker = map_city_to_marker(city)
@@ -160,6 +174,14 @@ for i, row in compr_df.iterrows():
 #                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
 # Create scatter plot
 scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
+
+# Loop through the scatter plot to draw the Beijing marker with hatching
+for city, x, y in zip(compr_df['city'], compr_df['obs'], compr_df['sim']):
+    if city == 'Beijing':
+        draw_hatched_marker(ax, x, y, color='white')  # Adjust the color and other parameters if needed
+    else:
+        # Plot non-Beijing cities with default scatter plot (or customized markers)
+        pass
 
 # Customize axis spines
 for spine in ax.spines.values():
@@ -217,9 +239,9 @@ intercept_display_1 = abs(intercept_1)
 intercept_display_2 = abs(intercept_2)
 intercept_sign_1 = '-' if intercept_1 < 0 else '+'
 intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+plt.text(0.6, 0.83, f'y = {slope_1:.1f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
          transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.6, 0.61, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+plt.text(0.6, 0.61, f'y = {slope_2:.3f}x {intercept_sign_2} {intercept_display_2:.1f}\n$r^2$ = {r_value_2 ** 2:.5f}',
          transform=scatterplot.transAxes, fontsize=18, color='red')
 # Add the number of data points for each segment
 num_points_1 = mask_1.sum()
@@ -233,5 +255,5 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10+7+13.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10+7+13_BeijingGrey.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()

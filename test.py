@@ -22,7 +22,9 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 from scipy.io import loadmat
 import matplotlib.lines as mlines
-from scipy.stats import linregress
+from matplotlib.lines import Line2D
+from matplotlib.patches import Circle
+from matplotlib.patches import Polygon
 
 cres = 'C360'
 year = 2019
@@ -31,38 +33,32 @@ inventory = 'CEDS'
 deposition = 'noLUO'
 
 # Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(
-    cres.lower(), deposition)  # CEDS, C360, noLUO
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-EDGARv61-vert-{}-output/monthly/'.format(cres.lower(), deposition) # EDGAR, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-HTAPv3-vert-{}-output/monthly/'.format(cres.lower(), deposition) # HTAP, noLUO
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C3720, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, LUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-merra2-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, MERRA2
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition,
-                                                                                  year)
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
 # Create scatter plot: sim vs meas, color blue and red with two lines
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_FT-IR_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = 1 * compr_df['obs']
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df['obs'] = 1 * compr_df['obs'] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
 compr_df['obs_se'] = 1 * compr_df['obs_se']
-# Exclude the city 'Delhi' from compr_df
-compr_df = compr_df[compr_df['city'] != 'Delhi']
-compr_df = compr_df[compr_df['city'] != 'Norman']
+
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
 for city in unique_cities:
     print(f"City: {city}")
 
 # Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 1.3*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g,
-x_range_2 = [1.3*1, compr_df['obs'].max()]
+x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
+x_range_2 = [1.4*1, compr_df['obs'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
@@ -73,7 +69,9 @@ red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
 
 # Create a custom color palette mapping each city to a color based on observed values
 def map_city_to_color(city, obs):
-    if x_range_1[0] <= obs <= x_range_1[1]:
+    if city == 'Beijing':  # Mark Beijing grey
+        return 'grey'
+    elif x_range_1[0] <= obs <= x_range_1[1]:
         index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
         obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
         return blue_cmap(obs_index)
@@ -140,6 +138,16 @@ def map_city_to_marker(city):
                 return 'o'  # Default marker style
     print(f"City not found in any region: {city}")
     return 'o'
+
+
+def draw_hatched_marker(ax, x, y, **kwargs):
+    # Define the coordinates for the triangle (example points)
+    triangle_coords = [(x, y + 0.1), (x - 0.1, y - 0.1), (x + 0.1, y - 0.1)]
+    # Create a triangle with edge color 'black' and hatch pattern
+    triangle = Polygon(triangle_coords, edgecolor='black', facecolor='white', hatch='/', **kwargs)
+    # Add the triangle with hatching to the axes
+    ax.add_patch(triangle)
+
 # Iterate over each unique city and map it to a marker
 for city in unique_cities:
     marker = map_city_to_marker(city)
@@ -160,6 +168,14 @@ plt.plot([-0.5, 6.2], [-0.5, 6.2], color='grey', linestyle='--', linewidth=1, zo
 # Create scatter plot
 scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
 
+# Loop through the scatter plot to draw the Beijing marker with hatching
+for city, x, y in zip(compr_df['city'], compr_df['obs'], compr_df['sim']):
+    if city == 'Beijing':
+        draw_hatched_marker(ax, x, y, color='white')  # Adjust the color and other parameters if needed
+    else:
+        # Plot non-Beijing cities with default scatter plot (or customized markers)
+        pass
+
 # Customize axis spines
 for spine in ax.spines.values():
     spine.set_edgecolor('black')
@@ -177,7 +193,7 @@ legend.get_frame().set_edgecolor('black')
 # plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
 plt.xlim([-0.5, 11])
 plt.ylim([-0.5, 11])
-plt.xticks([0, 3, 6, 6, 8, 10], fontname='Arial', size=18)
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
@@ -210,10 +226,10 @@ num_points_2 = mask_2.sum()
 plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
 # Set labels
-plt.xlabel('FT-IR Measured Elemental Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'FigSX_Scatter_{}_{}_{}_vs_FT-IR_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
