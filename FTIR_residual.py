@@ -62,6 +62,10 @@ if __name__ == '__main__':
     OM_20_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_raw_all_20230506.xlsx'), sheet_name='2020_09', usecols=['Site', 'Date', 'OM', 'OC'])
     OM_23_df.rename(columns={'FTIR_OC': 'OC'}, inplace=True)
     OM_22_new_df.rename(columns={'FTIR_OC': 'OC'}, inplace=True)
+    # Add a 'batch' column to each DataFrame
+    OM_23_df['batch'] = '2023_03'
+    OM_22_new_df['batch'] = '2022_06_new'
+    OM_20_df['batch'] = '2020_09'
     OM_df = pd.concat([OM_20_df, OM_22_new_df, OM_23_df])
     # Merge Residual and OM df based on matching values of "Site" and "Date"
     merged_df = pd.merge(Residual_df, OM_df, on=['Site', 'Date'], how='inner')
@@ -112,12 +116,14 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), sheet_name='OM_Residual')
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_SPARTAN.xlsx'), sheet_name='OM_OC_20_22new_23_Residual')
+compr_df = compr_df[compr_df['OM'] > 0]
+compr_df = compr_df[compr_df['batch'].isin(['2022_06_new', '2023_03'])]
 # compr_df['Ratio'] = compr_df['OM'] / compr_df['FTIR_OC']
 # compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
 
 # Print the names of each city
-unique_cities = compr_df['city'].unique()
+unique_cities = compr_df['City'].unique()
 for city in unique_cities:
     print(f"City: {city}")
 
@@ -136,7 +142,7 @@ region_mapping = {region: [city for city in cities if city in unique_cities] for
 # Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
 region_colors = {
     'North America': [
-        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
+        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9), (0.85, 0.9, 1)
     ],  # Blue shades
     'Central Asia': [
         (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
@@ -193,14 +199,20 @@ for city in unique_cities:
 
 print("City Marker:", city_marker)
 
-# Define the range of x-values for the two segments
-x_range = [compr_df['OM'].min(), compr_df['OM'].max()]
+# Calculate mean and standard error grouped by City
+summary_stats = compr_df.groupby('City').agg(
+    OM_mean=('OM', 'mean'),
+    OM_se=('OM', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_mean=('Residual', 'mean'),
+    Residual_se=('Residual', lambda x: x.std() / np.sqrt(len(x)))
+).reset_index()
+
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 
 # Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = sns.scatterplot(x='OM', y='Residual', data=compr_df, hue='city', palette=city_palette, s=20, alpha=1, edgecolor='k', style='city',  markers=city_marker)
+scatterplot = sns.scatterplot(x='OM', y='Residual', data=compr_df, hue='City', palette=city_palette, s=20, alpha=1, edgecolor='k', style='City',  markers=city_marker)
 scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
 for spine in scatterplot.spines.values():
@@ -232,7 +244,7 @@ legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('Batch 2 and 3: FT-IR OM vs Residual', fontsize=18, fontname='Arial', y=1.03)
+plt.title('FT-IR OM (Batch 2 and 3) vs Residual', fontsize=18, fontname='Arial', y=1.03)
 # plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
 plt.xlim([-5, 48])
 plt.ylim([-5, 48])
@@ -244,8 +256,10 @@ scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 # Add 1:1 line with grey dash
 x = compr_df['OM']
 y = compr_df['OM']
-plt.plot([compr_df['OM'].min(), 50], [compr_df['OM'].min(), 50], color='grey', linestyle='--', linewidth=1)
+plt.plot([-5, 50], [-5, 50], color='grey', linestyle='--', linewidth=1)
 
+# Define the range of x-values for the two segments
+x_range = [compr_df['OM'].min(), compr_df['OM'].max()]
 # Perform linear regression for all segments
 mask = (compr_df['OM'] >= x_range[0]) & (compr_df['OM'] <= x_range[1])
 slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['OM'][mask], compr_df['Residual'][mask])
@@ -253,16 +267,46 @@ slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['OM'][ma
 sns.regplot(x='OM', y='Residual', data=compr_df[mask],
             scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
 
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
+
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMD (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='OM', sim_col='Residual')
+nmd = nmd_nrmsd_results['NMD (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
+
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.1, 0.76, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='black')
-
-# Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.1, 0.7, f'N = {num_points}', transform=scatterplot.transAxes, fontsize=18, color='black')
-# plt.text(0.66, 0.05, f'Batch 2 and 3', transform=scatterplot.transAxes, fontsize=18)
+plt.text(0.05, 0.70, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\nN = {num_points}\nNMD = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=scatterplot.transAxes, fontsize=16, color='black')
 
 # Set labels
 plt.xlabel('FT-IR Organic Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -270,208 +314,11 @@ plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'OM_vs_Residual_site_2.5_threstold.svg', dpi=300)
+# plt.savefig(out_dir + 'OM_B23_vs_Residual.svg', dpi=300)
 
 plt.show()
-
 ################################################################################################
-# Plot FTIR_OM and Residual, colored by no. of pairs
-################################################################################################
-# Read the file
-merged_df = pd.read_excel(os.path.join(out_dir, 'OM_Residual_SPARTAN.xlsx'), sheet_name='OM_Residual_20_22new_23')
-merged_df = merged_df.loc[merged_df['Residual'] < 50]
-# merged_df['Ratio'] =merged_df['OM'] / merged_df['FTIR_OC']
-# merged_df['OM'] = merged_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
-
-# Create a 2D histogram to divide the area into squares and count data points in each square
-hist, xedges, yedges = np.histogram2d(merged_df['OM'], merged_df['Residual'], bins=60)
-
-# Determine the color for each square based on the number of pairs
-colors = np.zeros_like(hist)
-for i in range(len(hist)):
-    for j in range(len(hist[i])):
-        pairs = hist[i][j]
-        colors[i][j] = pairs
-
-# Define the custom color scheme gradient
-colors = [(1, 1, 1),(0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
-
-# Create a custom colormap using the gradient defined
-cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
-
-# Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
-
-# Plot the 2D histogram with the specified color scheme
-sns.set(font='Arial')
-scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
-
-# Display the original data points as a scatter plot
-# plt.scatter(merged_df['OM'], merged_df['Residual'], color='black', s=10, alpha=0.5)
-
-# Set title, xlim, ylim, ticks, labels
-plt.title('Batch 1, 2 and 3: FT-IR OM vs Residual', fontsize=18, fontname='Arial', y=1.03)
-plt.xlim([-5, 48])
-plt.ylim([-5, 48])
-plt.xticks([0, 10, 20, 30, 40], fontname='Arial', size=18)
-plt.yticks([0, 10, 20, 30, 40], fontname='Arial', size=18)
-ax.tick_params(axis='x', direction='out', width=1, length=5)
-ax.tick_params(axis='y', direction='out', width=1, length=5)
-
-# Add 1:1 line with black dash
-plt.plot([merged_df['Residual'].min(), merged_df['Residual'].max()], [merged_df['Residual'].min(), merged_df['Residual'].max()], color='grey', linestyle='--', linewidth=1)
-
-# Add number of data points to the plot
-num_points = len(merged_df)
-plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
-
-# Perform linear regression with NaN handling
-mask = ~np.isnan(merged_df['OM']) & ~np.isnan(merged_df['Residual'])
-slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['OM'][mask], merged_df['Residual'][mask])
-# Check for NaN in results
-if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
-    print("Linear regression results contain NaN values. Check the input data.")
-else:
-    # Add linear regression line and text
-    sns.regplot(x='OM', y='Residual', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
-    # Change the sign of the intercept for display
-    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
-
-    # Update the text line with the adjusted intercept
-    plt.text(0.1, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=18)
-
-plt.xlabel('FT-IR Orgainc Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-
-# Create the colorbar and specify font properties
-cbar_ax = fig.add_axes([0.68, 0.58, 0.02, 0.3])
-# cbar_ax = fig.add_axes([0.72, 0.20, 0.02, 0.3])
-cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
-cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
-cbar.outline.set_edgecolor('black')
-cbar.outline.set_linewidth(1)
-cbar.set_ticks([0, 10, 20, 30, 40], fontname='Arial', fontsize=14)
-ax.set_aspect(0.9 / 1)
-# show the plot
-plt.tight_layout()
-# plt.savefig(out_dir + 'OM_vs_Residual_pairs_20_22new_23.svg', dpi=300)
-plt.show()
-
-################################################################################################
-# Extract GCHP OM/OC at SPARTAN sites for 4 seasons
-################################################################################################
-# Load data
-site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Country', 'City', 'Latitude', 'Longitude'])
-
-# Create an empty DataFrame to store all seasons
-all_seasons_df = pd.DataFrame()
-# Loop through each season file
-for season_file in ['OMOC.DJF.01x01.nc', 'OMOC.JJA.01x01.nc', 'OMOC.MAM.01x01.nc', 'OMOC.SON.01x01.nc']:
-    # Load data
-    sim_df = xr.open_dataset(OMOC_dir + season_file, engine='netcdf4')
-
-    # Add a new column 'season' based on the current file being processed
-    season = season_file.split('.')[1]
-    sim_df['season'] = season
-
-    # Extract lon/lat from SPARTAN site
-    site_lon = site_df['Longitude']
-    site_df.loc[site_df['Longitude'] > 180, 'Longitude'] -= 360
-    site_lat = site_df['Latitude']
-
-    # Extract lon/lat, and OMOC from sim
-    sim_lon = np.array(sim_df.coords['lon'])
-    sim_lon[sim_lon > 180] -= 360
-    sim_lat = np.array(sim_df.coords['lat'])
-    sim_conc = np.array(sim_df['OMOC'])
-
-    # Initialize lists to store data
-    sim_data = []
-    site_data = []
-
-    # Iterate over each site
-    for site_index, (site_lon, site_lat) in enumerate(zip(site_lon, site_lat)):
-        # Find the nearest simulation latitude and longitude to the site
-        sim_lat_nearest = sim_df.lat.sel(lat=site_lat, method='nearest').values
-        sim_lon_nearest = sim_df.lon.sel(lon=site_lon, method='nearest').values
-
-        # Extract the corresponding simulation concentration
-        sim_conc_nearest = sim_df.sel(lat=sim_lat_nearest, lon=sim_lon_nearest)['OMOC'].values[0]
-
-        # Append the data to the lists
-        sim_data.append((sim_lat_nearest, sim_lon_nearest, sim_conc_nearest))
-        site_data.append((site_lat, site_lon))
-
-        print(site_index)
-
-    # Create DataFrame with sim and site data
-    sim_site_df = pd.DataFrame(sim_data, columns=['sim_lat', 'sim_lon', 'sim_OMOC'])
-    sim_site_df['site_lat'] = [data[0] for data in site_data]
-    sim_site_df['site_lon'] = [data[1] for data in site_data]
-
-    # Merge site_df with sim_site_df based on latitude and longitude
-    sim_site_df = pd.merge(sim_site_df, site_df[['Latitude', 'Longitude', 'Country', 'City']],
-                           left_on=['site_lat', 'site_lon'], right_on=['Latitude', 'Longitude'], how='left')
-    # Add a 'season' column
-    sim_site_df['season'] = season
-    # Drop the redundant latitude and longitude columns from site_df
-    sim_site_df.drop(columns=['Latitude', 'Longitude'], inplace=True)
-
-    # Concatenate the current season's DataFrame with all_seasons_df
-    all_seasons_df = pd.concat([all_seasons_df, sim_site_df], ignore_index=True)
-
-# Print the resulting DataFrame
-print(all_seasons_df)
-
-# Write the summary DataFrame to an Excel file
-with pd.ExcelWriter(out_dir + 'sim_OMOC_at_SPARTAN_site.xlsx', engine='openpyxl', mode='w') as writer:
-    all_seasons_df.to_excel(writer, sheet_name='All_Seasons', index=False)
-
-################################################################################################
-# Combine FTIR OC and extracted GCHP OM/OC based on lat/lon and seasons
-################################################################################################
-
-# Define a function to map months to seasons
-def get_season(month):
-    if month in [12, 1, 2]:
-        return 'DJF'
-    elif month in [3, 4, 5]:
-        return 'JJA'
-    elif month in [6, 7, 8]:
-        return 'MAM'
-    elif month in [9, 10, 11]:
-        return 'SON'
-    else:
-        return 'Unknown'
-
-# Load data
-obs_df = pd.read_excel(out_dir + 'FTIR_OM_vs_SPARTAN_Residual.xlsx', sheet_name='OM_OC_Residual_20_22new_23',
-                       usecols=['Site', 'Country', 'City', 'Start_Month_local', 'Residual', 'Date', 'OM', 'OC'])
-sim_df = pd.read_excel(out_dir + 'sim_OMOC_at_SPARTAN_site.xlsx', sheet_name='All_Seasons')
-
-# Add a new column 'season' based on 'Start_Month_local'
-obs_df.rename(columns={'Start_Month_local': 'month'}, inplace=True)
-obs_df['season'] = obs_df['month'].apply(get_season)
-obs_df.rename(columns={'OM': 'FTIR_OM', 'OC': 'FTIR_OC'}, inplace=True)
-
-
-# Merge obs_df and sim_df based on 'season', 'Latitude', and 'Longitude' in obs_df, and 'season', 'site_lat', and 'site_lon' in sim_df
-sim_obs_df = pd.merge(obs_df, sim_df, left_on=['season', 'Country', 'City'], right_on=['season', 'Country', 'City'], how='inner')
-
-# Drop the redundant latitude and longitude columns from site_df
-# sim_obs_df.drop(columns=['sim_lat', 'sim_lon'], inplace=True)
-
-print('sim_obs_df:', sim_obs_df)
-
-# Write the summary DataFrame to an Excel file
-with pd.ExcelWriter(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', engine='openpyxl', mode='w') as writer:
-    sim_obs_df.to_excel(writer, sheet_name='all', index=False)
-
-
-################################################################################################
-# Create scatter plot for Residual vs FTIR OM vs GCHP OM/OC, colored by region, in seperate regions
+# Create scatter plot for Residual vs OM, mean+se, colored by region
 ################################################################################################
 def get_city_index(city):
     for region, cities in region_mapping.items():
@@ -510,14 +357,16 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(out_dir + 'sim_OMOC_vs_FTIR_OM_vs_SPARTAN_residual.xlsx', sheet_name='all')
-compr_df.rename(columns={'City': 'city'}, inplace=True)
-compr_df['sim_OM'] = compr_df['sim_OMOC'] * compr_df['FTIR_OC']
-compr_df = compr_df.loc[compr_df['Residual'] < 50]
-# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_SPARTAN.xlsx'), sheet_name='OM_OC_20_22new_23_Residual')
+compr_df = compr_df[compr_df['OM'] > 0]
+compr_df = compr_df[compr_df['OC'] > 0]
+compr_df = compr_df[compr_df['Residual'] > 0]
+compr_df = compr_df[compr_df['batch'].isin(['2022_06_new', '2023_03'])] # ['2020_09', '2022_06_new', '2023_03']
+compr_df['Ratio'] = compr_df['OM'] / compr_df['OC']
+compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['OC']*2.5, axis=1)
 
 # Print the names of each city
-unique_cities = compr_df['city'].unique()
+unique_cities = compr_df['City'].unique()
 for city in unique_cities:
     print(f"City: {city}")
 
@@ -536,7 +385,7 @@ region_mapping = {region: [city for city in cities if city in unique_cities] for
 # Define custom palette for each region with 5 shades for each color, https://rgbcolorpicker.com/0-1
 region_colors = {
     'North America': [
-        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9)
+        (0, 0, 0.6),  (0, 0, 1), (0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9), (0.85, 0.9, 1)
     ],  # Blue shades
     'Central Asia': [
         (0.58, 0.1, 0.81), (0.66, 0.33, 0.83), (0.9, 0.4, 1), (0.73, 0.44, 0.8), (0.8, 0.55, 0.77), (0.88, 0.66, 0.74)
@@ -593,64 +442,117 @@ for city in unique_cities:
 
 print("City Marker:", city_marker)
 
-# Define the range of x-values for the two segments
-x_range = [compr_df['sim_OM'].min(), compr_df['sim_OM'].max()]
-
-# Filter the DataFrame to include only data from Africa and South Asia
-filtered_df = compr_df[compr_df['city'].isin(region_mapping['Africa'])]
-
-# Assign colors and markers based on the mapping dictionaries
-city_color_mapping = {city_info['city']: city_info['color'] for city_info in city_color_match}
-city_marker_mapping = {city_info['city']: city_info['marker'] for city_info in city_marker_match}
-
-# Assign colors and markers based on the mapping dictionaries
-filtered_df['color'] = filtered_df['city'].map(city_color_mapping)
-filtered_df['marker'] = filtered_df['city'].map(city_marker_mapping)
-
+# Calculate mean and standard error grouped by City
+summary_df = compr_df.groupby('City').agg(
+    OM_mean=('OM', 'mean'),
+    OM_se=('OM', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_mean=('Residual', 'mean'),
+    Residual_se=('Residual', lambda x: x.std() / np.sqrt(len(x)))
+).reset_index()
+summary_df = summary_df.sort_values(by='OM_mean')
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 
-# Plot filtered data
-for index, row in filtered_df.iterrows():
-    plt.scatter(row['sim_OM'], row['FTIR_OM'], color=row['color'], marker=row['marker'], edgecolor='k', s=40, label=row['city'])
+# Create scatter plot with white background, black border, and no grid
+sns.set(style="whitegrid", font="Arial", font_scale=1.2)
+# Iterate through each city to plot individual points and error bars
+for _, row in summary_df.iterrows():
+    city = row['City']
+    color = map_city_to_color(city)  # Get color for the city
+    marker = map_city_to_marker(city)  # Get marker for the city
+    # Plot the mean values with error bars
+    scatterplot = ax.errorbar(
+        row['OM_mean'], row['Residual_mean'],
+        xerr=row['OM_se'], yerr=row['Residual_se'],
+        fmt=marker, color=color, ecolor='black', elinewidth=1, capsize=3, label=city, markersize=8,
+        markeredgecolor='black', markeredgewidth=0.5,
+    )
+border_width = 1
+for spine in ax.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+ax.grid(False)  # remove the grid
+
+# Sort the legend labels based on x-axis order
+handles, labels = ax.get_legend_handles_labels()
+ordered_handles_labels = sorted(zip(summary_df['OM_mean'], handles, labels), key=lambda x: x[0])
+_, ordered_handles, ordered_labels = zip(*ordered_handles_labels)
+
+# Add the legend with ordered labels
+legend = ax.legend(ordered_handles, ordered_labels, markerscale=0.7, prop={'family': 'Arial','size': 11.5}, loc='best', bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.xlim([-5, 55])
-plt.ylim([-5, 55])
-plt.xticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
-plt.yticks([0, 10, 20, 30, 40, 50], fontname='Arial', size=18)
+plt.title('FT-IR OM (Batch 2 and 3) vs Residual, OM/OC + Residual', fontsize=16, fontname='Arial', y=1.03)
+# plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([-1, 21])
+plt.ylim([-1, 21])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 ax.tick_params(axis='x', direction='out', width=1, length=5)
 ax.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Add 1:1 line with grey dash
-x = filtered_df['sim_OM']
-y = filtered_df['sim_OM']
-plt.plot([filtered_df['sim_OM'].min(), 50], [filtered_df['sim_OM'].min(), 50], color='grey', linestyle='--', linewidth=1)
+x = summary_df['OM_mean']
+y = summary_df['OM_mean']
+plt.plot([-5, 50], [-5, 50], color='grey', linestyle='--', linewidth=1)
 
+# Define the range of x-values for the two segments
+x_range = [summary_df['OM_mean'].min(), summary_df['OM_mean'].max()]
 # Perform linear regression for all segments
-mask = (filtered_df['sim_OM'] >= x_range[0]) & (filtered_df['sim_OM'] <= x_range[1])
-slope, intercept, r_value, p_value, std_err = stats.linregress(filtered_df['sim_OM'][mask], filtered_df['FTIR_OM'][mask])
-
+mask = (summary_df['OM_mean'] >= x_range[0]) & (summary_df['OM_mean'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(summary_df['OM_mean'][mask], summary_df['Residual_mean'][mask])
 # Plot regression lines
-sns.regplot(x='sim_OM', y='FTIR_OM', data=filtered_df[mask],
+sns.regplot(x='OM_mean', y='Residual_mean', data=summary_df[mask],
             scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
+
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMD (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(summary_df, obs_col='OM_mean', sim_col='Residual_mean')
+nmd = nmd_nrmsd_results['NMD (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
 
 # Add text with linear regression equations and other statistics
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
-plt.text(0.1, 0.76, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}',
-         transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
-
-# Add the number of data points for each segment
 num_points = mask.sum()
-plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
-plt.text(0.70, 0.05, f'Africa', transform=ax.transAxes, fontsize=18, color='black', fontname='Arial')
+plt.text(0.05, 0.70, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\n$N$ = {num_points}\nNMD = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=ax.transAxes, fontsize=16, color='black')
 
 # Set labels
-plt.xlabel('FT-IR OC * GCHP OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('FTIR OM (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-ax.set_aspect(0.9 / 1)
+plt.xlabel('FT-IR Organic Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'GCHP_OMOC_FTIR_OC_vs_FTIR_OM_Africa.svg', dpi=300)
+# plt.savefig(out_dir + 'OM_B23_vs_Residual_Mean_residual>0_OMOC2.5.svg', dpi=300)
+
 plt.show()
