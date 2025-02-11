@@ -26,234 +26,94 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Circle
 from matplotlib.patches import Polygon
 
-cres = 'C360'
-year = 2019
-species = 'BC'
-inventory = 'CEDS'
-deposition = 'noLUO'
-
-# Set the directory path
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-EDGARv61-vert-{}-output/monthly/'.format(cres.lower(), deposition) # EDGAR, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-HTAPv3-vert-{}-output/monthly/'.format(cres.lower(), deposition) # HTAP, noLUO
-# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C3720, noLUO
-sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
-obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
-site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
-support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
-otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Create scatter plot: sim vs meas, color blue and red with two lines, MAC 7 and 13 indicated as shades, Beijing grey out
+# plot HIPS vs UV-Vis, color cell by no. of pairs
 ################################################################################################
+HIPS_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
+UV_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_UV-Vis_SPARTAN/'
+IBR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/'
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = 1 * compr_df['obs'] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-compr_df['obs_high'] = (10 / 7) * compr_df['obs']
-compr_df['obs_low'] = (10 / 13) * compr_df['obs']
-compr_df['obs_se'] = 1 * compr_df['obs_se']
+merged_df = pd.read_excel(os.path.join(out_dir, 'BC_HIPS_UV-Vis_SPARTAN.xlsx'))
+# Drop rows where f_BC is greater than 1
+merged_df = merged_df.loc[merged_df['f_BC_UV-Vis'] <= 1]
+# Rename to simplify coding
+merged_df.rename(columns={"BC_HIPS_(ug/m3)": "HIPS"}, inplace=True)
+merged_df.rename(columns={"BC_UV-Vis_(ug/m3)": "UV-Vis"}, inplace=True)
+merged_df.rename(columns={"City": "city"}, inplace=True)
 
-# Print the names of each city
-unique_cities = compr_df['city'].unique()
-for city in unique_cities:
-    print(f"City: {city}")
+# Create a 2D histogram to divide the area into squares and count data points in each square
+hist, xedges, yedges = np.histogram2d(merged_df['HIPS'], merged_df['UV-Vis'], bins=60)
 
-# Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-x_range_1_high = [compr_df['obs_high'].min(), 1.35*(10 / 7)] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-x_range_1_low = [compr_df['obs_low'].min(), 1.35*(10 / 13)] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-x_range_2 = [1.4*1, compr_df['obs'].max()]
+# Determine the color for each square based on the number of pairs
+colors = np.zeros_like(hist)
+for i in range(len(hist)):
+    for j in range(len(hist[i])):
+        pairs = hist[i][j]
+        colors[i][j] = pairs
 
-# Define custom blue and red colors
-blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
-red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
-# Create custom colormap
-blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
-red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
+# Define the custom color scheme gradient
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
 
-# Create a custom color palette mapping each city to a color based on observed values
-def map_city_to_color(city, obs):
-    if city == 'Beijing':  # Mark Beijing grey
-        return 'grey'
-    elif x_range_1[0] <= obs <= x_range_1[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
-        return blue_cmap(obs_index)
-    elif x_range_2[0] <= obs <= x_range_2[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()) - 1)
-        return red_cmap(obs_index)
-    else:
-        return 'black'
-
-# city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city'], compr_df['obs'])]
-city_palette = [map_city_to_color(city, obs) if city != 'Singapore' else blue_cmap(0.5)
-                for city, obs in zip(compr_df['city'], compr_df['obs'])]
-# Sort the cities in the legend based on observed values
-sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
-
-# Classify 'city' based on 'region'
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
-region_mapping = {
-    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
-    'Australia': ['Melbourne'],
-    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
-    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
-    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
-    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
-    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
-}
-region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
-region_markers = {
-    'North America': ['o', 'o', 'o', 'p', 'H', '*'],
-    'Australia': ['o', '^', 's', 'p', 'H', '*'],
-    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Africa': ['o', 'o', 'o', 'o', 'o', 'o'],
-    'South America': ['o', '^', 's', 'p', 'H', '*'],
-}
-# Create an empty list to store the city_marker for each city
-city_marker = []
-city_marker_match = []
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            if region == 'North America':
-                return 'd'
-            elif region == 'Australia':
-                return '*'
-            elif region == 'East Asia':
-                return '^'
-            elif region == 'Central Asia':
-                return 'p'
-            elif region == 'South Asia':
-                return 's'
-            elif region == 'Africa':
-                return 'o'
-            elif region == 'South America':
-                return 'o'
-            else:
-                return 'o'  # Default marker style
-    print(f"City not found in any region: {city}")
-    return 'o'
-
-def draw_hatched_marker(ax, x, y, **kwargs):
-    # Define the coordinates for the triangle (example points)
-    triangle_coords = [(x, y + 0.1), (x - 0.1, y - 0.1), (x + 0.1, y - 0.1)]
-    # Create a triangle with edge color 'black' and hatch pattern
-    triangle = Polygon(triangle_coords, edgecolor='black', facecolor='white', hatch='/', **kwargs)
-    # Add the triangle with hatching to the axes
-    ax.add_patch(triangle)
-
-# Iterate over each unique city and map it to a marker
-for city in unique_cities:
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        city_marker.append(marker)
-        city_marker_match.append({'city': city, 'marker': marker})
+# Create a custom colormap using the gradient defined
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
+
+# Plot the 2D histogram with the specified color scheme
 sns.set(font='Arial')
-# Add 1:1 line with grey dash
-plt.plot([-0.5, 6.2], [-0.5, 6.2], color='grey', linestyle='--', linewidth=1, zorder=1)
-# Add horizontal bars for uncertainty
-for i, row in compr_df.iterrows():
-    ax.plot([row['obs_low'], row['obs_high']], [row['sim'], row['sim']], color='black', alpha=0.7, linewidth=1.5, zorder=2)
+scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
 
-# # Add error bars
-# for i in range(len(compr_df)):
-#     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
-#                 xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
-#                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
-# Create scatter plot
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
-
-# Loop through the scatter plot to draw the Beijing marker with hatching
-for city, x, y in zip(compr_df['city'], compr_df['obs'], compr_df['sim']):
-    if city == 'Beijing':
-        draw_hatched_marker(ax, x, y, color='white')  # Adjust the color and other parameters if needed
-    else:
-        # Plot non-Beijing cities with default scatter plot (or customized markers)
-        pass
-
-# Customize axis spines
-for spine in ax.spines.values():
-    spine.set_edgecolor('black')
-    spine.set_linewidth(1)
-
-# Customize legend markers
-handles, labels = scatterplot.get_legend_handles_labels()
-sorted_handles = [handles[list(labels).index(city)] for city in sorted_cities]
-border_width = 1
-# Customize legend order
-legend = plt.legend(handles=sorted_handles, labels=sorted_cities, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12, markerscale=1.25)
-legend.get_frame().set_edgecolor('black')
+# Display the original data points as a scatter plot
+# plt.scatter(merged_df['HIPS'], merged_df['IBR'], color='black', s=10, alpha=0.5)
 
 # Set title, xlim, ylim, ticks, labels
-# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 11])
-plt.ylim([-0.5, 11])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
-scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+plt.xlim([merged_df['HIPS'].min()-0.5, 17])
+plt.ylim([merged_df['HIPS'].min()-0.5, 17])
+plt.xticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+plt.yticks([0, 4, 8, 12, 16], fontname='Arial', size=18)
+ax.tick_params(axis='x', direction='out', width=1, length=5)
+ax.tick_params(axis='y', direction='out', width=1, length=5)
 
-# Perform linear regression for the first segment
-mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
-mask_1_high = (compr_df['obs_high'] >= x_range_1_high[0]) & (compr_df['obs_high'] <= x_range_1_high[1])
-mask_1_low = (compr_df['obs_low'] >= x_range_1_low[0]) & (compr_df['obs_low'] <= x_range_1_low[1])
-# mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
-slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
-slope_1_high, intercept_1_high, r_value_1_high, p_value_1_high, std_err_1_high = stats.linregress(compr_df['obs_high'][mask_1_high], compr_df['sim'][mask_1_high])
-slope_1_low, intercept_1_low, r_value_1_low, p_value_1_low, std_err_1_low = stats.linregress(compr_df['obs_low'][mask_1_low], compr_df['sim'][mask_1_low])
-# Perform linear regression for the second segment
-mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-# mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
-slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
+# Add 1:1 line with black dash
+x = merged_df['HIPS']
+y = merged_df['HIPS']
+plt.plot([-0.5, 17], [-0.5, 17], color='grey', linestyle='--', linewidth=1)
 
-# Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
-            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
-sns.regplot(x='obs_high', y='sim', data=compr_df[mask_1_high],
-            scatter=False, ci=None, line_kws={'color': 'lightblue', 'linestyle': '--', 'linewidth': 0.5}, ax=ax)
-sns.regplot(x='obs_low', y='sim', data=compr_df[mask_1_low],
-            scatter=False, ci=None, line_kws={'color': 'lightblue', 'linestyle': '--', 'linewidth': 0.5}, ax=ax)
+# Add number of data points to the plot
+num_points = len(merged_df)
+plt.text(0.1, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
 
-# Regression lines
-y_range_1 = [slope_1 * x_range_1[0] + intercept_1, slope_1 * x_range_1[1] + intercept_1]
-y_vals = np.linspace(y_range_1[0], y_range_1[1], 100)
-regression_high_x = (y_vals - intercept_1_high) / slope_1_high
-regression_low_x = (y_vals - intercept_1_low) / slope_1_low
-# Fill the area between regression_low and regression_high with light blue
-ax.fill_betweenx(y_vals, regression_low_x, regression_high_x, color='lightblue', alpha=0.5)
+# Perform linear regression with NaN handling
+mask = ~np.isnan(merged_df['HIPS']) & ~np.isnan(merged_df['UV-Vis'])
+slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['HIPS'][mask], merged_df['UV-Vis'][mask])
+# Check for NaN in results
+if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
+    print("Linear regression results contain NaN values. Check the input data.")
+else:
+    # Add linear regression line and text
+    sns.regplot(x='HIPS', y='UV-Vis', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
+    # Change the sign of the intercept for display
+    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
+    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
 
-# Add text with linear regression equations and other statistics
-intercept_display_1 = abs(intercept_1)
-intercept_display_2 = abs(intercept_2)
-intercept_sign_1 = '-' if intercept_1 < 0 else '+'
-intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope_1:.1f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.6, 0.61, f'y = {slope_2:.3f}x {intercept_sign_2} {intercept_display_2:.1f}\n$r^2$ = {r_value_2 ** 2:.5f}',
-         transform=scatterplot.transAxes, fontsize=18, color='red')
-# Add the number of data points for each segment
-num_points_1 = mask_1.sum()
-plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-num_points_2 = mask_2.sum()
-plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+    # Update the text line with the adjusted intercept
+    plt.text(0.1, 0.76, f"y = {slope:.1f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
+             transform=plt.gca().transAxes, fontsize=18)
 
-# Set labels
-plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('HIPS Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('UV-Vis Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
-# Show the plot
+# Create the colorbar and specify font properties
+cbar_ax = fig.add_axes([0.68, 0.25, 0.02, 0.4])
+cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
+cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
+cbar.set_ticks([0, 5, 10, 15, 20], fontname='Arial', fontsize=14)
+
+# show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10+7+13_BeijingGrey.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(os.path.join(out_dir, "BC_Comparison_HIPS_UV-Vis.svg"), format="SVG", dpi=300)
 plt.show()

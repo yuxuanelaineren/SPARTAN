@@ -44,12 +44,14 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Create scatter plot: sim vs meas, color blue and red with two lines
+# Create scatter plot: sim vs meas, color blue and red with two lines, MAC 7 and 13 indicated as dots, Beijing grey out
 ################################################################################################
 # Read the file
 compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
 compr_df['obs'] = 1 * compr_df['obs'] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
-compr_df['obs_se'] = 1 * compr_df['obs_se']
+compr_df['obs_high'] = (10 / 7) * compr_df['obs']
+compr_df['obs_low'] = (10 / 13) * compr_df['obs']
+# compr_df['obs_se'] = 1 * compr_df['obs_se']
 
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
@@ -58,16 +60,19 @@ for city in unique_cities:
 
 # Define the range of x-values for the two segments
 x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g
+x_range_1_high = [compr_df['obs_high'].min(), 1.35*(10 / 7)]
+x_range_1_low = [compr_df['obs_low'].min(), 1.35*(10 / 13)]
 x_range_2 = [1.4*1, compr_df['obs'].max()]
+x_range_2_high = [1.4*(10 / 7), compr_df['obs_high'].max()]
+x_range_2_low = [1.4*(10 / 13), compr_df['obs_low'].max()]
 
 # Define custom blue and red colors
 blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
 red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
-# Create custom colormap
 blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
 red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
 
-# Create a custom color palette mapping each city to a color based on observed values
+# Map city to color based on observed values
 def map_city_to_color(city, obs):
     if city == 'Beijing':  # Mark Beijing grey
         return 'grey'
@@ -139,15 +144,6 @@ def map_city_to_marker(city):
     print(f"City not found in any region: {city}")
     return 'o'
 
-
-def draw_hatched_marker(ax, x, y, **kwargs):
-    # Define the coordinates for the triangle (example points)
-    triangle_coords = [(x, y + 0.1), (x - 0.1, y - 0.1), (x + 0.1, y - 0.1)]
-    # Create a triangle with edge color 'black' and hatch pattern
-    triangle = Polygon(triangle_coords, edgecolor='black', facecolor='white', hatch='/', **kwargs)
-    # Add the triangle with hatching to the axes
-    ax.add_patch(triangle)
-
 # Iterate over each unique city and map it to a marker
 for city in unique_cities:
     marker = map_city_to_marker(city)
@@ -158,23 +154,20 @@ for city in unique_cities:
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 sns.set(font='Arial')
-# Add 1:1 line with grey dash
-plt.plot([-0.5, 6.2], [-0.5, 6.2], color='grey', linestyle='--', linewidth=1, zorder=1)
-# # Add error bars
-# for i in range(len(compr_df)):
-#     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
-#                 xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
-#                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
-# Create scatter plot
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
 
-# Loop through the scatter plot to draw the Beijing marker with hatching
-for city, x, y in zip(compr_df['city'], compr_df['obs'], compr_df['sim']):
-    if city == 'Beijing':
-        draw_hatched_marker(ax, x, y, color='white')  # Adjust the color and other parameters if needed
-    else:
-        # Plot non-Beijing cities with default scatter plot (or customized markers)
-        pass
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 5.1], [-0.5, 5.1], color='grey', linestyle='--', linewidth=1, zorder=1)
+
+# Plot horizontal uncertainty lines with markers at both ends
+scatterplot = sns.scatterplot(x='obs_high', y='sim', data=compr_df, hue='city', palette=city_palette, s=50, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=3) # linestyle=(0, (3, 3))
+sns.scatterplot(x='obs_low', y='sim', data=compr_df, hue='city', palette=city_palette, s=50, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=3)
+for i, row in compr_df.iterrows():
+    ax.plot([row['obs_low'], row['obs_high']], [row['sim'], row['sim']], color='black', alpha=0.7, linewidth=1.5, zorder=2)
+# Overlay markers with vertical line style inside obs_high
+for i, row in compr_df.iterrows():
+    ax.plot(row['obs_low'], row['sim'], marker=r'$/$', markersize=3, color='black', alpha=0.7, linewidth=0, zorder=4)
+    ax.plot(row['obs_high'], row['sim'], marker=r'$\backslash$', markersize=3, color='black', alpha=0.7, linewidth=0, zorder=4)
+
 
 # Customize axis spines
 for spine in ax.spines.values():
@@ -199,31 +192,49 @@ scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Perform linear regression for the first segment
-mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
-# mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
-slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
+# mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
+mask_1_high = (compr_df['obs_high'] >= x_range_1_high[0]) & (compr_df['obs_high'] <= x_range_1_high[1])
+mask_1_low = (compr_df['obs_low'] >= x_range_1_low[0]) & (compr_df['obs_low'] <= x_range_1_low[1])
+# slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
+slope_1_high, intercept_1_high, r_value_1_high, p_value_1_high, std_err_1_high = stats.linregress(compr_df['obs_high'][mask_1_high], compr_df['sim'][mask_1_high])
+slope_1_low, intercept_1_low, r_value_1_low, p_value_1_low, std_err_1_low = stats.linregress(compr_df['obs_low'][mask_1_low], compr_df['sim'][mask_1_low])
 # Perform linear regression for the second segment
-mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-# mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
-slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
-# Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
-            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
+mask_2_high = (compr_df['obs_high'] >= x_range_2_high[0]) & (compr_df['obs_high'] <= x_range_2_high[1])
+mask_2_low = (compr_df['obs_low'] >= x_range_2_low[0]) & (compr_df['obs_low'] <= x_range_2_low[1])
+# slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
+slope_2_high, intercept_2_high, r_value_2_high, p_value_2_high, std_err_2_high = stats.linregress(compr_df['obs_high'][mask_2_high], compr_df['sim'][mask_2_high])
+slope_2_low, intercept_2_low, r_value_2_low, p_value_2_low, std_err_2_low = stats.linregress(compr_df['obs_low'][mask_2_low], compr_df['sim'][mask_2_low])
 
-# Add text with linear regression equations and other statistics
-intercept_display_1 = abs(intercept_1)
-intercept_display_2 = abs(intercept_2)
-intercept_sign_1 = '-' if intercept_1 < 0 else '+'
-intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope_1:.2f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+# # Plot regression lines
+# # sns.regplot(x='obs', y='sim', data=compr_df[mask_1],scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# sns.regplot(x='obs_high', y='sim', data=compr_df[mask_1_high],
+#             scatter=False, ci=None, line_kws={'color': 'lightblue', 'linestyle': '--', 'linewidth': 0.5}, ax=ax)
+# sns.regplot(x='obs_low', y='sim', data=compr_df[mask_1_low],
+#             scatter=False, ci=None, line_kws={'color': 'lightblue', 'linestyle': '--', 'linewidth': 0.5}, ax=ax)
+# # Regression lines
+# y_range_1 = [slope_1 * x_range_1[0] + intercept_1, slope_1 * x_range_1[1] + intercept_1]
+# y_vals = np.linspace(y_range_1[0], y_range_1[1], 100)
+# regression_high_x = (y_vals - intercept_1_high) / slope_1_high
+# regression_low_x = (y_vals - intercept_1_low) / slope_1_low
+# # Fill the area between regression_low and regression_high with light blue
+# ax.fill_betweenx(y_vals, regression_low_x, regression_high_x, color='lightblue', alpha=0.5)
+
+# Add text with linear regression equations for high (right)
+intercept_display_1_high = abs(intercept_1_high)
+intercept_display_2_high = abs(intercept_2_high)
+intercept_display_1_low = abs(intercept_1_low)
+intercept_display_2_low = abs(intercept_2_low)
+intercept_sign_1_high = '-' if intercept_1_high < 0 else '+'
+intercept_sign_2_high = '-' if intercept_2_high < 0 else '+'
+intercept_sign_1_low = '-' if intercept_1_high < 0 else '+'
+intercept_sign_2_low = '-' if intercept_2_high < 0 else '+'
+num_points_1 = mask_1_high.sum()
+num_points_2 = mask_2_high.sum()
+plt.text(0.5, 0.73, f'y$_L$ = {slope_1_low:.1f}x$_L$ {intercept_sign_1_low} {intercept_display_1_low:.2f}\ny$_H$ = {slope_1_high:.1f}x$_H$ {intercept_sign_1_high} {intercept_display_1_high:.2f}\n$r^2$ = {r_value_1_high ** 2:.2f}\nN = {num_points_1}',
          transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.6, 0.61, f'y = {slope_2:.2f}x {intercept_sign_2} {intercept_display_2:.2f}\n$r^2$ = {r_value_2 ** 2:.2f}',
+plt.text(0.5, 0.48, f'y$_L$ = {slope_2_low:.3f}x$_L$ {intercept_sign_2_low} {intercept_display_2_low:.1f}\ny$_H$ = {slope_2_high:.4f}x$_H$ {intercept_sign_2_high} {intercept_display_2_high:.1f}\n$r^2$ = {r_value_2_high ** 2:.5f}\nN = {num_points_2}',
          transform=scatterplot.transAxes, fontsize=18, color='red')
-# Add the number of data points for each segment
-num_points_1 = mask_1.sum()
-plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-num_points_2 = mask_2.sum()
-plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
 
 # Set labels
 plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -231,5 +242,5 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC7+13_BeijingGrey.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
