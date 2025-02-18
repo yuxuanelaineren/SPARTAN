@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import calendar
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs  # cartopy must be >=0.19
 import xarray as xr
@@ -20,97 +21,196 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
-from scipy.io import loadmat
-
 
 # Set the directory path
-obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
+FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/'
+Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
+OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/AMS/supportData/'
-
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/'
 ################################################################################################
-# plot HIPS vs UV-Vis, color cell by no. of pairs
+# Create scatter plot for Residual vs OM, colored by region
 ################################################################################################
+def get_city_index(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return cities.index(city)
+    return float('inf')  # If city is not found, place it at the end
+def get_region_for_city(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return region
+    print(f"Region not found for city: {city}")
+    return None
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            city_index = cities.index(city)
+            assigned_marker = region_markers[region][city_index % len(region_markers[region])]
+            return assigned_marker
+    return None
 # Read the file
-merged_df = pd.read_excel(os.path.join(out_dir, 'SO4_IC_XRF_SPARTAN.xlsx'))
-# Rename to simplify coding
-merged_df.rename(columns={"S_XRF_(ug/m3)": "XRF"}, inplace=True)
-merged_df.rename(columns={"IC_SO4_(ug/m3)": "IC"}, inplace=True)
-merged_df.rename(columns={"City": "city"}, inplace=True)
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_Chris.xlsx'), sheet_name='OM_OC_batch234_Residual')
+# compr_df = compr_df[compr_df['OM'] > 0]
+compr_df = compr_df[compr_df['batch'].isin(['batch2_2022_06_batch3_2023_03', 'batch4_2024_03'])]
+compr_df.rename(columns={'RM_dry': 'Residual'}, inplace=True)
+compr_df['DustRatio'] = compr_df['Soil'] / compr_df['PM2.5']
+# compr_df['Residual'] = compr_df['Residual_RCFM'] + compr_df['OC_RCFM']
+# compr_df['Ratio'] = compr_df['OM'] / compr_df['FTIR_OC']
+# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['FTIR_OC']*2.5, axis=1)
+
+# Print the names of each city
+unique_cities = compr_df['City'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+
+# Classify 'city' based on 'region'
+region_mapping = {
+    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
+    'Australia': ['Melbourne'],
+    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
+    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
+    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
+    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
+    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
+}
+region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
+
+# Define custom palette for each region with 5 shades for each color
+region_markers = {
+    'North America': ['o', '^', 's', 'p', 'H', '*'],
+    'Australia': ['o', '^', 's', 'p', 'H', '*'],
+    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Africa': ['o', '^', 's', 'p', 'H', '*'],
+    'South America': ['o', '^', 's', 'p', 'H', '*'],
+}
+
+# Create an empty list to store the city_marker for each city
+city_marker = []
+city_marker_match = []
+
+# Iterate over each unique city and map it to a marker
+for city in unique_cities:
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        city_marker.append(marker)
+        city_marker_match.append({'city': city, 'marker': marker})
+
+print("City Marker:", city_marker)
+
+# Create a colormap for DustRatio
+cmap = plt.get_cmap('viridis')  # You can change 'viridis' to any other colormap you like
+norm = plt.Normalize(vmin=compr_df['DustRatio'].min(), vmax=compr_df['DustRatio'].max())
 
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
 
-# Create a 2D histogram to divide the area into squares and count data points in each square
-hist, xedges, yedges = np.histogram2d(merged_df['XRF'], merged_df['IC'], bins=220)
-
-# Determine the color for each square based on the number of pairs
-colors = np.zeros_like(hist)
-for i in range(len(hist)):
-    for j in range(len(hist[i])):
-        pairs = hist[i][j]
-        colors[i][j] = pairs
-
-# Define the custom color scheme gradient
-colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0)]
-
-# Create a custom colormap using the gradient defined
-cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
-
-
-# Plot the 2D histogram with the specified color scheme
+# Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-scatterplot = plt.imshow(hist.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], cmap=cmap, origin='lower')
+scatterplot = sns.scatterplot(x='OM', y='Residual', data=compr_df, hue='City', palette=city_palette, s=20, alpha=1, edgecolor='k', style='City',  markers=city_marker)
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
 
-# Display the original data points as a scatter plot
-# plt.scatter(merged_df['XRF'], merged_df['IC'], color='black', s=2, alpha=0.5)
+# Sort the unique_cities list based on their appearance in region_mapping
+unique_cities_sorted = sorted(unique_cities, key=get_city_index)
+
+# Create legend with custom order
+sorted_city_color_match = sorted(city_color_match, key=lambda x: (
+    list(region_mapping.keys()).index(get_region_for_city(x['city'])),
+    region_mapping[get_region_for_city(x['city'])].index(x['city'])
+))
+
+# Create legend handles with both color and marker for each city
+legend_handles = []
+for city_info in sorted_city_color_match:
+    city = city_info['city']
+    color = city_info['color']
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        handle = plt.Line2D([0], [0], marker=marker, color=color, linestyle='', markersize=6, label=city)
+        legend_handles.append(handle)
+
+# Create legend with custom handles
+legend = plt.legend(handles=legend_handles, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.xlim([merged_df['IC'].min()-0.5, 15])
-plt.ylim([merged_df['IC'].min()-0.5, 15])
-plt.xticks([0, 5, 10, 15], fontname='Arial', size=18)
-plt.yticks([0, 5, 10, 15], fontname='Arial', size=18)
-ax.tick_params(axis='x', direction='out', width=1, length=5)
-ax.tick_params(axis='y', direction='out', width=1, length=5)
+plt.title('FT-IR OM vs updated Residual', fontsize=18, fontname='Arial', y=1.03)
+# plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([-9, 80])
+plt.ylim([-9, 80])
+plt.xticks([0, 20, 40, 60, 80], fontname='Arial', size=18)
+plt.yticks([0, 20, 40, 60, 80], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Add 1:1 line with grey dash
-x = merged_df['IC']
-y = merged_df['IC']
-plt.plot([merged_df['IC'].min(), merged_df['IC'].max()], [3*merged_df['IC'].min(), 3*merged_df['IC'].max()], color='grey', linestyle='--', linewidth=1)
+x = compr_df['OM']
+y = compr_df['OM']
+plt.plot([-10, 80], [-10, 80], color='grey', linestyle='--', linewidth=1)
 
-# Add number of data points to the plot
-num_points = len(merged_df)
-plt.text(0.6, 0.7, f'N = {num_points}', transform=ax.transAxes, fontsize=18)
+# Define the range of x-values for the two segments
+x_range = [compr_df['OM'].min(), compr_df['OM'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['OM'] >= x_range[0]) & (compr_df['OM'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['OM'][mask], compr_df['Residual'][mask])
+# Plot regression lines
+sns.regplot(x='OM', y='Residual', data=compr_df[mask],
+            scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
 
-# Perform linear regression with NaN handling
-mask = ~np.isnan(merged_df['XRF']) & ~np.isnan(merged_df['IC'])
-slope, intercept, r_value, p_value, std_err = stats.linregress(merged_df['XRF'][mask], merged_df['IC'][mask])
-# Check for NaN in results
-if np.isnan(slope) or np.isnan(intercept) or np.isnan(r_value):
-    print("Linear regression results contain NaN values. Check the input data.")
-else:
-    # Add linear regression line and text
-    # sns.regplot(x='XRF', y='IC', data=merged_df, scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1})
-    # Change the sign of the intercept for display
-    intercept_display = abs(intercept)  # Use abs() to ensure a positive value
-    intercept_sign = '-' if intercept < 0 else '+'  # Determine the sign for display
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
 
-    # Update the text line with the adjusted intercept
-    plt.text(0.6, 0.76, f"y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}",
-             transform=plt.gca().transAxes, fontsize=18)
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
 
-plt.xlabel('XRF Sulfur (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('IC Sulfate (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMD (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='OM', sim_col='Residual')
+nmd = nmd_nrmsd_results['NMD (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
 
-# Create the colorbar and specify font properties
-cbar_ax = fig.add_axes([0.68, 0.2, 0.02, 0.4])
-cbar = plt.colorbar(label='Number of Pairs', cax=cbar_ax)
-cbar.ax.set_ylabel('Number of Pairs', fontsize=14, fontname='Arial')
-cbar.outline.set_edgecolor('black')
-cbar.outline.set_linewidth(1)
-cbar.set_ticks([0, 50, 100, 150], fontname='Arial', fontsize=14)
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+num_points = mask.sum()
+plt.text(0.05, 0.65, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\nN = {num_points}\nNMD = {nmd:.1f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=scatterplot.transAxes, fontsize=18, color='black')
 
-# show the plot
+# Set labels
+plt.xlabel('FT-IR Organic Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
 plt.tight_layout()
-# plt.savefig(os.path.join(out_dir, "Sulfate_Comparison_IC_XRF.svg"), format="SVG", dpi=300)
+# plt.savefig(out_dir + 'OM_B234_vs_updatedResidual.svg', dpi=300)
+
 plt.show()

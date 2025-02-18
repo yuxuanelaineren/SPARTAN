@@ -54,25 +54,18 @@ def map_city_to_color(city):
 def map_city_to_marker(city):
     for region, cities in region_mapping.items():
         if city in cities:
-            city_index = cities.index(city) % len(region_colors[region])
-            assigned_marker = region_markers[region][city_index]
-            print(f"City: {city}, Region: {region}, Assigned Marker: {assigned_marker}")
-            return assigned_marker
-    print(f"City not found in any region: {city}")
-    return (0, 0, 0)
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
             city_index = cities.index(city)
             assigned_marker = region_markers[region][city_index % len(region_markers[region])]
             return assigned_marker
     return None
+
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_SPARTAN.xlsx'), sheet_name='OM_OC_20_22new_23_Residual')
-compr_df = compr_df[compr_df['OM'] > 0]
-compr_df = compr_df[compr_df['OC'] > 0]
-compr_df = compr_df[compr_df['Residual'] > 0]
-compr_df = compr_df[compr_df['batch'].isin(['2022_06_new', '2023_03'])] # ['2020_09', '2022_06_new', '2023_03']
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_Chris.xlsx'), sheet_name='OM_OC_batch234_Residual')
+compr_df = compr_df[compr_df['batch'].isin(['batch2_2022_06_batch3_2023_03', 'batch4_2024_03'])]
+compr_df.rename(columns={'RM_dry': 'Residual'}, inplace=True)
+# compr_df = compr_df[compr_df['OM'] > 0]
+# compr_df = compr_df[compr_df['OC'] > 0]
+# compr_df = compr_df[compr_df['Residual'] > 0]
 compr_df['Ratio'] = compr_df['OM'] / compr_df['OC']
 compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['OC']*2.5, axis=1)
 
@@ -153,17 +146,36 @@ for city in unique_cities:
 
 print("City Marker:", city_marker)
 
-# Calculate mean and standard error grouped by City
-summary_df = compr_df.groupby('City').agg(
-    OM_mean=('OM', 'mean'),
-    OM_se=('OM', lambda x: x.std() / np.sqrt(len(x))),
-    Residual_mean=('Residual', 'mean'),
-    Residual_se=('Residual', lambda x: x.std() / np.sqrt(len(x)))
+# Step 1: Calculate monthly mean and standard error for each city
+monthly_stats = compr_df.groupby(['City', 'start_month']).agg(
+    OM_monthly_mean=('OM', 'mean'),
+    OM_monthly_se=('OM', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_monthly_mean=('Residual', 'mean'),
+    Residual_monthly_se=('Residual', lambda x: x.std() / np.sqrt(len(x)))
 ).reset_index()
-summary_df = summary_df.sort_values(by='OM_mean')
+
+# Step 2: Calculate annual statistics (mean and standard error) from monthly results
+annual_stats = monthly_stats.groupby(['City']).agg(
+    OM_mean=('OM_monthly_mean', 'mean'),
+    OM_se=('OM_monthly_se', 'mean'),
+    Residual_mean=('Residual_monthly_mean', 'mean'),
+    Residual_se=('Residual_monthly_se', 'mean')
+).reset_index()
+
+# Rename the annual statistics DataFrame as summary_df and sort by OM_mean
+summary_df = annual_stats.sort_values(by='OM_mean')
+
+# # Calculate mean and standard error grouped by City
+# summary_df = compr_df.groupby('City').agg(
+#     OM_mean=('OM', 'mean'),
+#     OM_se=('OM', lambda x: x.std() / np.sqrt(len(x))),
+#     Residual_mean=('Residual', 'mean'),
+#     Residual_se=('Residual', lambda x: x.std() / np.sqrt(len(x)))
+# ).reset_index()
+# summary_df = summary_df.sort_values(by='OM_mean')
+
 # Create figure and axes objects
 fig, ax = plt.subplots(figsize=(8, 6))
-
 # Create scatter plot with white background, black border, and no grid
 sns.set(style="whitegrid", font="Arial", font_scale=1.2)
 # Iterate through each city to plot individual points and error bars
@@ -194,12 +206,12 @@ legend = ax.legend(ordered_handles, ordered_labels, markerscale=0.7, prop={'fami
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('FT-IR OM (Batch 2 and 3) vs Residual, OM/OC + Residual', fontsize=16, fontname='Arial', y=1.03)
+plt.title('FT-IR OM vs updated Residual, OM/OC < 2.5', fontsize=16, fontname='Arial', y=1.03)
 # plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
-plt.xlim([-1, 21])
-plt.ylim([-1, 21])
-plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
-plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.xlim([-3, 35])
+plt.ylim([-3, 35])
+plt.xticks([0, 10, 20, 30], fontname='Arial', size=18)
+plt.yticks([0, 10, 20, 30], fontname='Arial', size=18)
 ax.tick_params(axis='x', direction='out', width=1, length=5)
 ax.tick_params(axis='y', direction='out', width=1, length=5)
 
@@ -255,8 +267,8 @@ nrmsd = nmd_nrmsd_results['NRMSD (%)']
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
 num_points = mask.sum()
-plt.text(0.05, 0.70, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\n$N$ = {num_points}\nNMD = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
-         transform=ax.transAxes, fontsize=16, color='black')
+plt.text(0.05, 0.65, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.2f}\n$N$ = {num_points}\nNMD = {nmd:.1f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=ax.transAxes, fontsize=18, color='black')
 
 # Set labels
 plt.xlabel('FT-IR Organic Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
@@ -264,6 +276,6 @@ plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'OM_B23_vs_Residual_Mean_residual>0_OMOC2.5.svg', dpi=300)
+# plt.savefig(out_dir + 'OM_B234_vs_updatedResidual_AnnualMean_OMOC2.5.svg', dpi=300)
 
 plt.show()
