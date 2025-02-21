@@ -50,11 +50,12 @@ def map_city_to_marker(city):
             return assigned_marker
     return None
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_Chris.xlsx'), sheet_name='OM_OC_batch234_Residual')
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_vs_Residual_Chris_vs_sim_OMOC.xlsx'), sheet_name='All')
 compr_df = compr_df[compr_df['batch'].isin(['batch2_2022_06_batch3_2023_03', 'batch4_2024_03'])]
 compr_df.rename(columns={'RM_dry': 'Residual'}, inplace=True)
 compr_df['DustRatio'] = compr_df['Soil'] / compr_df['PM2.5']
-compr_df['Residual'] = compr_df.apply(lambda row: row['Residual'] if row['DustRatio'] < 0.4 else row['Residual'] + row['PM2.5']*(row['DustRatio'] - 0.4), axis=1)
+compr_df['OM'] = compr_df['FTIR_OC'] * compr_df['sim_OMOC']
+# compr_df['Residual'] = compr_df.apply(lambda row: row['Residual'] if row['DustRatio'] < 0.4 else row['Residual'] + row['PM2.5']*(row['DustRatio'] - 0.4), axis=1)
 # compr_df = compr_df[compr_df['OM'] > 0]
 # compr_df = compr_df[compr_df['OC'] > 0]
 # compr_df = compr_df[compr_df['Residual'] > 0]

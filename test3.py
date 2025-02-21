@@ -60,14 +60,15 @@ def map_city_to_marker(city):
     return None
 
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_Residual_Chris.xlsx'), sheet_name='OM_OC_batch234_Residual')
+compr_df = pd.read_excel(os.path.join(out_dir, 'FT-IR_OM_OC_vs_Residual_Chris_vs_sim_OMOC.xlsx'), sheet_name='All')
 compr_df = compr_df[compr_df['batch'].isin(['batch2_2022_06_batch3_2023_03', 'batch4_2024_03'])]
 compr_df.rename(columns={'RM_dry': 'Residual'}, inplace=True)
 # compr_df = compr_df[compr_df['OM'] > 0]
 # compr_df = compr_df[compr_df['OC'] > 0]
 # compr_df = compr_df[compr_df['Residual'] > 0]
-compr_df['Ratio'] = compr_df['OM'] / compr_df['OC']
-compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['OC']*2.5, axis=1)
+compr_df['OM'] = compr_df['FTIR_OC'] * compr_df['sim_OMOC']
+# compr_df['Ratio'] = compr_df['OM'] / compr_df['OC']
+# compr_df['OM'] = compr_df.apply(lambda row: row['OM'] if row['Ratio'] < 2.5 else row['OC']*2.5, axis=1)
 
 # Print the names of each city
 unique_cities = compr_df['City'].unique()
@@ -206,7 +207,7 @@ legend = ax.legend(ordered_handles, ordered_labels, markerscale=0.7, prop={'fami
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('FT-IR OM vs updated Residual, OM/OC < 2.5', fontsize=16, fontname='Arial', y=1.03)
+plt.title('FT-IR OC × GEOS-Chem OM/OC vs updated Residual', fontsize=16, fontname='Arial', y=1.03)
 # plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
 plt.xlim([-3, 35])
 plt.ylim([-3, 35])
@@ -271,11 +272,11 @@ plt.text(0.05, 0.65, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.2f}
          transform=ax.transAxes, fontsize=18, color='black')
 
 # Set labels
-plt.xlabel('FT-IR Organic Matter (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('FT-IR OC × GEOS-Chem OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 plt.ylabel('Residual (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-# plt.savefig(out_dir + 'OM_B234_vs_updatedResidual_AnnualMean_OMOC2.5.svg', dpi=300)
+# plt.savefig(out_dir + 'FTIR_OC*sim_OMOC_vs_updatedResidual_AnnualMean.svg', dpi=300)
 
 plt.show()
