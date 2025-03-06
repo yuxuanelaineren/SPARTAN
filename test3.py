@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
-import calendar
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs  # cartopy must be >=0.19
 import xarray as xr
@@ -21,119 +18,107 @@ from scipy import stats
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
-import matplotlib.dates as mdates
+from scipy.io import loadmat
+import matplotlib.lines as mlines
+from scipy.stats import linregress
+cres = 'C360'
+year = 2019
+species = 'BC'
+inventory = 'CEDS'
+deposition = 'noLUO'
 
 # Set the directory path
-FTIR_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/'
-Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/'
-OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-EDGARv61-vert-{}-output/monthly/'.format(cres.lower(), deposition) # EDGAR, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-HTAPv3-vert-{}-output/monthly/'.format(cres.lower(), deposition) # HTAP, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-CSwinds-output/monthly/'.format(cres.lower(), deposition) # CEDS, C3720, noLUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, LUO
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, GEOS-FP
+# sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-merra2-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, MERRA2
+obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/'
-Colocation_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/Co-location/'
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
+otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Create stack bar plot and pir charts for Abu Dhabi
+# Effects of COVID-19 lockdown
 ################################################################################################
-# Read the file
-file_path = os.path.join(out_dir, 'AbuDhabi_RCFM_FT-IR_master.xlsx')
-compr_df = pd.read_excel(file_path)
-abu_dhabi_df = compr_df[compr_df['City'] == 'Abu Dhabi'].copy()
-# Define the columns that need to be converted (all _XRF_ng columns)
-XRF_columns = [col for col in compr_df.columns if col.endswith('_XRF_ng')]
-# Perform conversion for each of these columns
-for col in XRF_columns:
-    # Convert mass to concentration (ng/m3 to µg/m³)
-    abu_dhabi_df[f'{col.replace("_XRF_ng", "")}'] = abu_dhabi_df[col] / abu_dhabi_df['Volume_m3'] / 1000  # Divide by 1000 to convert ng to µg
-# abu_dhabi_df['Soil × 0.1'] = abu_dhabi_df['Soil'] * 0.1
-# compr_df['TEO × 0.05'] = compr_df['TEO'] * 0.05
-# compr_df['Zn × 0.1'] = compr_df['Zn'] * 0.1
-# compr_df['Pb × 0.1'] = compr_df['Pb'] * 0.1
-# compr_df['Si × 0.1'] = compr_df['Si'] * 0.1
-
-# Select species for the stacked bar plot
-columns_to_plot = ['Al', 'Si', 'Ca', 'Fe', 'Ti']
-abu_dhabi_df[columns_to_plot] = abu_dhabi_df[columns_to_plot].clip(lower=0)
-# Define species colors for plotting
-species_colors = {
-    'Al': '#4D4D4D',       # Dark Gray
-    'Si': '#C2B280',       # Sandy Brown
-    'Ca': '#D9D9D9',       # Light Gray
-    'Fe': '#B7410E',       # Rusty Brown
-    'Ti': '#A0C4FF',       # Light Blue
-    # 'Soil': '#B8860B',     # Earthy Brown
+# # Load the dataset
+# df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', sheet_name='All')
+#
+# # Define affected (Jan 2020 to June 2021) and non-affected periods
+# affected_period = ((df['start_year'] == 2020) | ((df['start_year'] == 2021) & (df['start_month'] <= 6)))
+# non_affected_period = ((df['start_year'] == 2019) | ((df['start_year'] == 2021) & (df['start_month'] > 6)) | (df['start_year'] > 2021))
+# # affected_period = ((df['start_year'] == 2020) | (df['start_year'] == 2021))
+# # non_affected_period = ((df['start_year'] == 2019) | (df['start_year'] > 2021))
+#
+# # Count filters by city for each period
+# affected_counts = df[affected_period].groupby('City').size().reset_index(name='Affected_Period_Count')
+# non_affected_counts = df[non_affected_period].groupby('City').size().reset_index(name='Non_Affected_Period_Count')
+# total_counts = df.groupby('City').size().reset_index(name='Total_Count')
+#
+# # Merge results into a single dataframe
+# result = total_counts.merge(affected_counts, on='City', how='left')
+# result = result.merge(non_affected_counts, on='City', how='left')
+# result = result.fillna(0)
+# print(result)
+#
+# # Merge the affected, non-affected, and total counts by 'City'
+# merged_counts = total_counts.merge(affected_counts, on='City', how='left') \
+#                             .merge(non_affected_counts, on='City', how='left') \
+#                             .fillna(0)
+# merged_counts['Non_Affected_Percentage'] = merged_counts['Non_Affected_Period_Count'] / merged_counts['Total_Count']
+# print(merged_counts[['City', 'Non_Affected_Percentage']])
+#
+# # Optional: Save the merged counts to a CSV file
+# # merged_counts.to_csv("filter_counts_by_city.csv", index=False)
+# # Extract non-affected samples based on the 'non_affected_period'
+# non_affected_df = df[non_affected_period]
+# # Save the annual DataFrame as 'annual'
+# with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', engine='openpyxl', mode='a') as writer:
+#     non_affected_df.to_excel(writer, sheet_name='not-affected-by-COVID_All', index=False)
+#
+# # Group by 'Local Site Name', 'Month', 'Latitude', and 'Longitude'
+# obs_monthly_df = non_affected_df.groupby(['Site', 'Country',	'City', 'start_month']).agg(
+#     monthly_mean=('BC', 'mean'),
+#     monthly_median=('BC', 'median'),
+#     monthly_count=('BC', 'count')
+# ).reset_index()
+#
+# # Calculate the annual average 'ECf_Val' for each 'SiteName', 'Latitude', 'Longitude'
+# obs_annual_df = obs_monthly_df.groupby(['Site', 'Country',	'City']).agg(
+#     annual_mean=('monthly_mean', 'mean'),
+#     annual_median=('monthly_median', 'median'),
+#     annual_count=('monthly_count', 'sum'),
+#     annual_se=('monthly_mean', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))  # SE = std / sqrt(n)
+# ).reset_index()
+#
+# # Save the annual DataFrame as 'annual'
+# with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', engine='openpyxl', mode='a') as writer:
+#     obs_monthly_df.to_excel(writer, sheet_name='non_affected_Mon', index=False)
+#     obs_annual_df.to_excel(writer, sheet_name='non_affected_Annual', index=False)
+# Example dataset for simulated and measured concentrations (replace with actual data)
+data = {
+    "City": ["Abu Dhabi", "Melbourne", "Dhaka", "Bujumbura", "Halifax", "Sherbrooke", "Beijing", "Addis Ababa", "Bandung",
+             "Haifa", "Rehovot", "Kanpur", "Seoul", "Ulsan", "Mexico City", "Ilorin", "Fajardo", "Kaohsiung", "Taipei",
+             "Pasadena", "Johannesburg", "Pretoria"],
+    "Csim": [2.603483532, 0.431163175, 4.747680126, 3.673715311, 0.224381786, 0.362798662, 1.385444595, 4.799646778,
+             4.02492436, 0.845562015, 1.169340151, 3.833072212, 1.175011504, 0.7798648, 2.008797088, 2.326521987, 0.10290891,
+             1.33695288, 0.830166517, 0.474454487, 2.381180572, 2.013390368], # affected by Covid
+    "Cmeas": [2.673810294, 0.431163175, 5.56315254, 3.673715311, 0.23148047, 0.363877719, 1.398329746, 4.799646778, 3.663149692,
+             0.845562015, 1.159011749, 3.833072212, 1.196440665, 0.7798648, 2.073496912, 2.982349549, 0.10684992, 1.33695288,
+             0.830166517, 0.474454487, 2.381180572, 2.098747274] # full dataset
 }
 
-# Convert dates to numerical format for better width control
-dates_num = mdates.date2num(abu_dhabi_df['Date'])
-# Define bar width and offset for Soil bars
-bar_width = 7  # Reduce width for better spacing
-offset = 4  # Shift soil bars slightly to the right
-# Initialize bottom values for stacking
-bottom_values = np.zeros(len(abu_dhabi_df))
-# Convert dates to numerical format for better width control
-dates_num = mdates.date2num(abu_dhabi_df['Date'])
+# Create DataFrame
+df = pd.DataFrame(data)
 
-# Create figure and axis
-fig, ax = plt.subplots(figsize=(12, 6))
-# # Add a grey dashed line at y = 0
-# ax.axhline(0, color='grey', linestyle='dashed', linewidth=1)
-# Loop through species and plot in order (stacked bars)
-for specie in columns_to_plot:
-    if specie in species_colors:
-        ax.bar(dates_num, abu_dhabi_df[specie], width=bar_width, label=specie,
-               color=species_colors[specie], bottom=bottom_values, align='center')
-        bottom_values += abu_dhabi_df[specie]  # Accumulate values for stacking
+# Calculate the Normalized Mean Bias (NMB)
+nmb = np.sum(df['Csim'] - df['Cmeas']) / np.sum(df['Cmeas'])
 
-# # Plot Soil as a separate bar next to each stacked bar
-# if 'Soil × 0.1' in abu_dhabi_df.columns:
-#     ax.bar(dates_num + offset, abu_dhabi_df['Soil'], width=bar_width, label='Soil',
-#            color='yellow', edgecolor='white', align='center')
+# Calculate the Normalized Mean Difference (NMD)
+nmd = np.sum(np.abs(df['Csim'] - df['Cmeas'])) / np.sum(df['Cmeas'])
 
-# Format x-axis
-ax.set_xlabel('Date', fontsize=16, family='Arial')
-ax.set_ylabel('Concentration (µg/m$^3$)', fontsize=16, family='Arial')
-ax.set_title('Stacked Bar Plot of Dust Components: Abu Dhabi', fontsize=18, family='Arial')
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))  # Format x-axis labels
-plt.xticks(rotation=45, fontsize=12, family='Arial')
-plt.yticks([0, 4, 8, 12, 16], fontsize=12, family='Arial')
-plt.ylim([0, 16])
-
-# Add legend
-legend = ax.legend(prop={'family': 'Arial', 'size': 12}, bbox_to_anchor=(1.01, 1), loc='upper left')
-legend.get_frame().set_edgecolor('black')
-# Set font for all texts in the plot
-# plt.rcParams.update({'font.size': 18, 'font.family': 'Arial'})
-plt.tight_layout()
-# Save the plot as a JPG with 300 DPI
-output_path = os.path.join(out_dir, 'Stacked_Bar_AbuDhabi_Dust.jpg')
-plt.savefig(output_path, dpi=300, bbox_inches='tight', format='jpg')
-
-# Show plot
-plt.show()
-# # Filter data for Abu Dhabi
-# abu_dhabi_df = compr_df[compr_df['City'] == 'Abu Dhabi']
-# # Select the relevant columns for averaging
-# columns_to_average = ['BC', 'TEO', 'Soil', 'Na', 'NO3', 'NH4', 'SO4', 'PBW', 'Cl', 'K', 'RM_dry']
-# # Compute the average values
-# average_values = abu_dhabi_df[columns_to_average].mean()
-# # Remove negative values
-# average_values = average_values[average_values > 0]
-# # Check if there are valid values left
-# if not average_values.empty:
-#     # Get colors for available species
-#     colors = [species_colors[specie] for specie in average_values.index]
-#
-#     # Plot the pie chart
-#     plt.figure(figsize=(8, 8))
-#     plt.pie(average_values, labels=average_values.index, autopct='%1.1f%%', startangle=140,
-#             colors=colors, wedgeprops={'edgecolor': 'black'})
-#
-#     # Set title
-#     plt.title('Average Composition in Abu Dhabi')
-#
-#     # Show the plot
-#     plt.show()
-# else:
-#     print("No valid positive values to plot.")
+# Print the results
+print(f"Normalized Mean Bias (NMB): {nmb}")
+print(f"Normalized Mean Difference (NMD): {nmd}")
