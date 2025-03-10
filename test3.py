@@ -41,84 +41,130 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Effects of COVID-19 lockdown
+# Other Measurements: Combine other measurements and GCHP dataset based on lat/lon
 ################################################################################################
-# # Load the dataset
-# df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', sheet_name='All')
-#
-# # Define affected (Jan 2020 to June 2021) and non-affected periods
-# affected_period = ((df['start_year'] == 2020) | ((df['start_year'] == 2021) & (df['start_month'] <= 6)))
-# non_affected_period = ((df['start_year'] == 2019) | ((df['start_year'] == 2021) & (df['start_month'] > 6)) | (df['start_year'] > 2021))
-# # affected_period = ((df['start_year'] == 2020) | (df['start_year'] == 2021))
-# # non_affected_period = ((df['start_year'] == 2019) | (df['start_year'] > 2021))
-#
-# # Count filters by city for each period
-# affected_counts = df[affected_period].groupby('City').size().reset_index(name='Affected_Period_Count')
-# non_affected_counts = df[non_affected_period].groupby('City').size().reset_index(name='Non_Affected_Period_Count')
-# total_counts = df.groupby('City').size().reset_index(name='Total_Count')
-#
-# # Merge results into a single dataframe
-# result = total_counts.merge(affected_counts, on='City', how='left')
-# result = result.merge(non_affected_counts, on='City', how='left')
-# result = result.fillna(0)
-# print(result)
-#
-# # Merge the affected, non-affected, and total counts by 'City'
-# merged_counts = total_counts.merge(affected_counts, on='City', how='left') \
-#                             .merge(non_affected_counts, on='City', how='left') \
-#                             .fillna(0)
-# merged_counts['Non_Affected_Percentage'] = merged_counts['Non_Affected_Period_Count'] / merged_counts['Total_Count']
-# print(merged_counts[['City', 'Non_Affected_Percentage']])
-#
-# # Optional: Save the merged counts to a CSV file
-# # merged_counts.to_csv("filter_counts_by_city.csv", index=False)
-# # Extract non-affected samples based on the 'non_affected_period'
-# non_affected_df = df[non_affected_period]
-# # Save the annual DataFrame as 'annual'
-# with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', engine='openpyxl', mode='a') as writer:
-#     non_affected_df.to_excel(writer, sheet_name='not-affected-by-COVID_All', index=False)
-#
-# # Group by 'Local Site Name', 'Month', 'Latitude', and 'Longitude'
-# obs_monthly_df = non_affected_df.groupby(['Site', 'Country',	'City', 'start_month']).agg(
-#     monthly_mean=('BC', 'mean'),
-#     monthly_median=('BC', 'median'),
-#     monthly_count=('BC', 'count')
-# ).reset_index()
-#
-# # Calculate the annual average 'ECf_Val' for each 'SiteName', 'Latitude', 'Longitude'
-# obs_annual_df = obs_monthly_df.groupby(['Site', 'Country',	'City']).agg(
-#     annual_mean=('monthly_mean', 'mean'),
-#     annual_median=('monthly_median', 'median'),
-#     annual_count=('monthly_count', 'sum'),
-#     annual_se=('monthly_mean', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))  # SE = std / sqrt(n)
-# ).reset_index()
-#
-# # Save the annual DataFrame as 'annual'
-# with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', engine='openpyxl', mode='a') as writer:
-#     obs_monthly_df.to_excel(writer, sheet_name='non_affected_Mon', index=False)
-#     obs_annual_df.to_excel(writer, sheet_name='non_affected_Annual', index=False)
-# Example dataset for simulated and measured concentrations (replace with actual data)
-data = {
-    "City": ["Abu Dhabi", "Melbourne", "Dhaka", "Bujumbura", "Halifax", "Sherbrooke", "Beijing", "Addis Ababa", "Bandung",
-             "Haifa", "Rehovot", "Kanpur", "Seoul", "Ulsan", "Mexico City", "Ilorin", "Fajardo", "Kaohsiung", "Taipei",
-             "Pasadena", "Johannesburg", "Pretoria"],
-    "Csim": [2.603483532, 0.431163175, 4.747680126, 3.673715311, 0.224381786, 0.362798662, 1.385444595, 4.799646778,
-             4.02492436, 0.845562015, 1.169340151, 3.833072212, 1.175011504, 0.7798648, 2.008797088, 2.326521987, 0.10290891,
-             1.33695288, 0.830166517, 0.474454487, 2.381180572, 2.013390368], # affected by Covid
-    "Cmeas": [2.673810294, 0.431163175, 5.56315254, 3.673715311, 0.23148047, 0.363877719, 1.398329746, 4.799646778, 3.663149692,
-             0.845562015, 1.159011749, 3.833072212, 1.196440665, 0.7798648, 2.073496912, 2.982349549, 0.10684992, 1.33695288,
-             0.830166517, 0.474454487, 2.381180572, 2.098747274] # full dataset
-}
+## 1. Match other measurements and GCHP
+# Create empty lists to store data for each month
+monthly_data = []
+# Loop through each month
+for mon in range(1, 13):
+    sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c360, noLUO
+    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/Summary_measurements_2019.xlsx', sheet_name='>2month')
 
-# Create DataFrame
-df = pd.DataFrame(data)
+    nf = np.array(sim_df.nf)
+    Ydim = np.array(sim_df.Ydim)
+    Xdim = np.array(sim_df.Xdim)
+    sim_lon = np.array(sim_df.lons).astype('float32')
+    sim_lon[sim_lon > 180] -= 360
+    sim_lat = np.array(sim_df.lats).astype('float32')
+    # sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
+    print(np.array(sim_df[species]).shape)
+    sim_conc = np.array(sim_df[species])[0, :, :, :]  # Selecting the first level
 
-# Calculate the Normalized Mean Bias (NMB)
-nmb = np.sum(df['Csim'] - df['Cmeas']) / np.sum(df['Cmeas'])
+    # Drop NaN and infinite values from obs_conc
+    obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
+    obs_df = obs_df.dropna(subset=[species], thresh=1)
 
-# Calculate the Normalized Mean Difference (NMD)
-nmd = np.sum(np.abs(df['Csim'] - df['Cmeas'])) / np.sum(df['Cmeas'])
+    # Extract lon/lat, BC, BC/PM25, and BC/SO4 from observation data
+    obs_lon = obs_df['Longitude']
+    obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
+    obs_lat = obs_df['Latitude']
+    obs_conc = obs_df[species]
 
-# Print the results
-print(f"Normalized Mean Bias (NMB): {nmb}")
-print(f"Normalized Mean Difference (NMD): {nmd}")
+    # Find the nearest simulation lat/lon neighbors for each observation
+    match_obs_lon = np.zeros(len(obs_lon))
+    match_obs_lat = np.zeros(len(obs_lon))
+    match_obs = np.zeros(len(obs_lon))
+    match_sim_lon = np.zeros(len(obs_lon))
+    match_sim_lat = np.zeros(len(obs_lon))
+    match_sim = np.zeros(len(obs_lon))
+
+    # Calculate distance between the observation and all simulation points
+    for k in range(len(obs_lon)):
+        # Spherical law of cosines:
+        R = 6371  # Earth radius 6371 km
+        buffer = 10
+        latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
+        lonk = obs_lon.iloc[k]  # Use .iloc to access value by integer location
+        # Select simulation points within a buffer around the observation's lat/lon
+        ind = np.where((sim_lon > lonk - buffer) & (sim_lon < lonk + buffer)
+                       & (sim_lat > latk - buffer) & (sim_lat < latk + buffer))
+        # Extract relevant simulation data
+        sim_lonk = sim_lon[ind]
+        sim_latk = sim_lat[ind]
+        sim_conck = sim_conc[ind]
+        # Calculate distance between the observation and selected simulation points
+        dd = np.arccos(np.sin(latk * np.pi / 180) * np.sin(sim_latk * np.pi / 180) + \
+                       np.cos(latk * np.pi / 180) * np.cos(sim_latk * np.pi / 180) * np.cos(
+            (sim_lonk - lonk) * np.pi / 180)) * R
+        ddmin = np.nanmin(dd)
+        ii = np.where(dd == ddmin)
+        # Use iloc to access the element by integer position
+        match_obs[k] = obs_conc.iloc[k]
+        match_sim[k] = np.nanmean(sim_conck[ii])
+        match_sim_lat[k] = np.nanmean(sim_latk[ii])
+        match_sim_lon[k] = np.nanmean(sim_lonk[ii])
+
+    # Get unique lat/lon and average observation data at the same simulation box
+    coords = np.concatenate((match_sim_lat[:, None], match_sim_lon[:, None]), axis=1)
+    coords_u, ind, ct = np.unique(coords, return_index=True, return_counts=True, axis=0)
+    match_lon_u = match_sim_lon[ind]
+    match_lat_u = match_sim_lat[ind]
+    match_sim_u = match_sim[ind]
+    # Calculate the monthly average observation data for each unique simulation box
+    match_obs_u = np.zeros(len(ct))
+    for i in range(len(ct)):
+        irow = np.where((coords == coords_u[i]).all(axis=1))
+        match_obs_u[i] = np.nanmean(match_obs[irow])
+
+    # Drop rows with NaN values from the final data
+    nanindex = np.argwhere(
+        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_obs_u))).squeeze()
+    match_lon_u = np.delete(match_lon_u, nanindex)
+    match_lat_u = np.delete(match_lat_u, nanindex)
+    match_sim_u = np.delete(match_sim_u, nanindex)
+    match_obs_u = np.delete(match_obs_u, nanindex)
+
+    # Create DataFrame for current month
+    columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
+    compr_data = np.concatenate(
+        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], ct[:, None]), axis=1)
+    compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
+
+    # Function to find matching rows and add 'Country' and 'City'
+    def find_and_add_location(lat, lon):
+        for index, row in obs_df.iterrows():
+            if abs(row['Latitude'] - lat) <= 0.3 and abs(row['Longitude'] - lon) <= 0.3:
+                return row['Country'], row['City']
+        return None, None
+    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
+                                                   result_type='expand')
+    print(compr_df)
+
+    # Append data to the monthly_data list
+    monthly_data.append(compr_df)
+    # Calculate mean, sd, and max for simulated and observed concentrations
+    mean_sim = np.nanmean(match_sim_u)
+    sd_sim = np.nanstd(match_sim_u)
+    max_sim = np.nanmax(match_sim_u)
+    mean_obs = np.nanmean(match_obs_u)
+    sd_obs = np.nanstd(match_obs_u)
+    max_obs = np.nanmax(match_obs_u)
+    # Print the results
+    print(f'Simulated_{species}_in_{mon} Mean: {mean_sim:.2f}, SD: {sd_sim:.2f}, Max: {max_sim:.2f}')
+    print(f'Observed_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
+
+# Combine monthly data to create the annual DataFrame
+monthly_df = pd.concat(monthly_data, ignore_index=True)
+annual_df = monthly_df.groupby(['country', 'city']).agg({
+    'sim': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
+    'obs': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
+    'num_obs': 'sum',
+    'lat': 'mean',
+    'lon': 'mean'
+}).reset_index()
+annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
+with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_other_{}_{}_Summary_forRvision_2month.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
+    monthly_df.to_excel(writer, sheet_name='Mon', index=False)
+    annual_df.to_excel(writer, sheet_name='Annual', index=False)
+sim_df.close()

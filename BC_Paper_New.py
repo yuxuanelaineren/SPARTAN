@@ -2271,8 +2271,8 @@ ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
 ax.coastlines(color=(0.4, 0.4, 0.4))
 ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
 ax.set_global()
-# ax.set_extent([-140, 160, -60, 63], crs=ccrs.PlateCarree())
-ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+ax.set_extent([-140, 180, -60, 63], crs=ccrs.PlateCarree()) # New Zealand extends beyond 160°E (reaching about 178°E)
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
 # ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
 # ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
 # ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
@@ -2310,7 +2310,7 @@ for face in range(6):
     im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
 # Read annual comparison data
-compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_other_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)),
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_other_{}_{}_Summary_forRevision_2month.xlsx'.format(cres, inventory, deposition, species, year)),
                           sheet_name='Annual')
 compar_notna = compar_df[compar_df.notna().all(axis=1)]
 # Adjust SPARTAN observations
@@ -2378,7 +2378,7 @@ cbar.ax.tick_params(axis='y', labelsize=12)
 cbar.outline.set_edgecolor('black')
 cbar.outline.set_linewidth(1)
 
-# plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+# plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_other_{}_{}_forRevision_2month.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
 plt.show()
 
 ################################################################################################
