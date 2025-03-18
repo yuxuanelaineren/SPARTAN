@@ -23,9 +23,10 @@ import matplotlib.lines as mlines
 from scipy.stats import linregress
 cres = 'C360'
 year = 2019
-species = 'BC'
+species = 'OA'
 inventory = 'CEDS'
 deposition = 'noLUO'
+
 
 # Set the directory path
 sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
@@ -37,134 +38,132 @@ sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixe
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-merra2-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, MERRA2
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Other Measurements: Combine other measurements and GCHP dataset based on lat/lon
+# Other Measurements: Map SPARTAN, others, and GCHP data for the entire year
 ################################################################################################
-## 1. Match other measurements and GCHP
-# Create empty lists to store data for each month
-monthly_data = []
-# Loop through each month
-for mon in range(1, 13):
-    sim_df = xr.open_dataset(sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4')  # CEDS, c360, noLUO
-    obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/Summary_measurements_2019.xlsx', sheet_name='>2month')
+# Map SPARTAN and GCHP data for the entire year
+plt.style.use('default')
+plt.figure(figsize=(10, 5))
+left = 0.03
+bottom = 0.05
+width = 0.94
+height = 0.9
+ax = plt.axes([left, bottom, width, height], projection=ccrs.Miller())
+ax.coastlines(color=(0.4, 0.4, 0.4))
+ax.add_feature(cfeature.BORDERS, linestyle='-', edgecolor=(0.4, 0.4, 0.4))
+ax.set_global()
+ax.set_extent([-140, 180, -60, 63], crs=ccrs.PlateCarree()) # New Zealand extends beyond 160°E (reaching about 178°E)
+# ax.set_extent([70, 130, 20, 50], crs=ccrs.PlateCarree()) # China
+# ax.set_extent([-130, -60, 15, 50], crs=ccrs.PlateCarree()) # US
+# ax.set_extent([-10, 30, 40, 60], crs=ccrs.PlateCarree()) # Europe
+# ax.set_extent([-15, 25, 40, 60], crs=ccrs.PlateCarree()) # Europe with cbar
+# ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree()) # NA
 
-    nf = np.array(sim_df.nf)
-    Ydim = np.array(sim_df.Ydim)
-    Xdim = np.array(sim_df.Xdim)
-    sim_lon = np.array(sim_df.lons).astype('float32')
-    sim_lon[sim_lon > 180] -= 360
-    sim_lat = np.array(sim_df.lats).astype('float32')
-    # sim_df['BC_PM25'] = sim_df['BC'] / sim_df['PM25']
-    print(np.array(sim_df[species]).shape)
-    sim_conc = np.array(sim_df[species])[0, :, :, :]  # Selecting the first level
+# Define the colormap
+colors = [(1, 1, 1), (0, 0.5, 1), (0, 1, 0), (1, 1, 0), (1, 0.5, 0), (1, 0, 0), (0.7, 0, 0)] # white-blure-green-yellow-orange-red
+# colors = [(0, 0, 0.6), (0, 0, 1),(0, 0.27, 0.8), (0.4, 0.5, 0.9), (0.431, 0.584, 1), (0.7, 0.76, 0.9), (0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)] # dark blue to light blue to light red to dark red
+cmap = mcolors.LinearSegmentedColormap.from_list('custom_gradient', colors)
+vmax = 20
 
-    # Drop NaN and infinite values from obs_conc
-    obs_df = obs_df.replace([np.inf, -np.inf], np.nan)  # Convert infinite values to NaN
-    obs_df = obs_df.dropna(subset=[species], thresh=1)
+# Accumulate data for each face over the year
+annual_conc = None
+for face in range(6):
+    print(f"Processing face {face}")
+    for mon in range(1, 13):
+        print("Opening file:", sim_dir + '{}.noLUO.CEDS01-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, year, mon))
+        with xr.open_dataset(
+            sim_dir + '{}.{}.CEDS01-fixed-vert.PM25.RH35.NOx.O3.{}{:02d}.MonMean.nc4'.format(cres, deposition, year, mon), engine='netcdf4') as sim_df:  # CEDS
+            x = sim_df.corner_lons.isel(nf=face)
+            y = sim_df.corner_lats.isel(nf=face)
+            sim_df['OA'] = sim_df['POA'] + sim_df['SOA']
+            print(np.array(sim_df[species]).shape) # (72, 6, 360, 360)
+            conc = sim_df[species].isel(lev=0, nf=face).load()
+            if annual_conc is None:
+                annual_conc = conc
+            else:
+                annual_conc = annual_conc + conc
+        print("File closed.")
+    # Calculate the annual average
+    annual_conc /= 12
+    # annual_conc = annual_conc.squeeze() # (1, 360, 360) to (360, 360)
+    # annual_conc = annual_conc[0, :, :] # (72, 360, 360) to (360, 360)
+    print(x.shape, y.shape, annual_conc.shape)
+    # Plot the annual average data for each face
+    im = ax.pcolormesh(x, y, annual_conc, cmap=cmap, transform=ccrs.PlateCarree(), vmin=0, vmax=vmax)
 
-    # Extract lon/lat, BC, BC/PM25, and BC/SO4 from observation data
-    obs_lon = obs_df['Longitude']
-    obs_df.loc[obs_df['Longitude'] > 180, 'Longitude'] -= 360
-    obs_lat = obs_df['Latitude']
-    obs_conc = obs_df[species]
+# Read annual comparison data
+compar_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)),
+                          sheet_name='Annual')
+compar_df['obs'] = compar_df['obs_FTIR_OM']
+compar_df['sim'] = compar_df['sim']
+compar_notna = compar_df[compar_df.notna().all(axis=1)]
+# Adjust SPARTAN observations
+# compar_notna.loc[compar_notna['source'] == 'SPARTAN', 'obs'] *= 1
+lon, lat, obs, sim = compar_notna.lon, compar_notna.lat, compar_notna.obs, compar_notna.sim
+print(compar_notna['source'].unique())
+# Define marker sizes
+s1 = [40] * len(obs)  # inner circle: Measurement
+s2 = [120] * len(obs)  # outer ring: Simulation
+markers = {'SPARTAN': 'o', 'other': 's'}
+# Create scatter plot for other data points (squares)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source != 'SPARTAN':  # Exclude SPARTAN data for now
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Create scatter plot for SPARTAN data points (circles)
+for i, row in compar_notna.iterrows():
+    source = row['source']
+    if source == 'SPARTAN':  # Plot SPARTAN data
+        marker = markers.get(source, 'o')
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['obs'], s=s1[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=4)
+        plt.scatter(x=row['lon'], y=row['lat'], c=row['sim'], s=s2[i], marker=marker, edgecolor='black',
+                    linewidth=0.5, vmin=0, vmax=vmax, transform=ccrs.PlateCarree(), cmap=cmap, zorder=3)
+# Calculate mean and standard error for SPARTAN sites
+spartan_data = compar_notna[compar_notna['source'] == 'SPARTAN']
+# spartan_developed_data = spartan_data[spartan_data['marker'] != 'Global South']
+# spartan_gs_data = spartan_data[spartan_data['marker'] == 'Global South']
+other_data = compar_notna[compar_notna['source'] == 'other']
+mean_obs = np.mean(spartan_data['obs'])
+std_error_obs = np.std(spartan_data['obs']) / np.sqrt(len(spartan_data['obs']))
+mean_sim = np.mean(spartan_data['sim'])
+std_error_sim = np.std(spartan_data['sim']) / np.sqrt(len(spartan_data['sim']))
+# Calculate NMD and NMB for SPARTAN sites
+NMD_spartan = np.sum(np.abs(spartan_data['sim'] - spartan_data['obs'])) / np.sum(spartan_data['obs'])
+NMB_spartan = np.sum(spartan_data['sim'] - spartan_data['obs']) / np.sum(spartan_data['obs'])
+# Print the final values
+print(f"Normalized Mean Difference at SPARTAN sites (NMD_spartan): {NMD_spartan:.4f}")
+print(f"Normalized Mean Bias at SPARTAN sites (NMB_spartan): {NMB_spartan:.4f}")
+# Add text annotations to the plot
+ax.text(0.3, 0.04, f'NMD across SPARTAN sites = {NMD_spartan * 100:.0f}%', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.14, f'Meas = {mean_obs:.1f} ± {std_error_obs:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.08, f'Sim at Meas = {mean_sim:.1f} ± {std_error_sim:.2f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.3, 0.02, f'Sim (Population-weighted) = {pwm:.1f} ± {pwse:.4f} µg/m$^3$', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# ax.text(0.92, 0.05, f'{year}', fontsize=14, fontname='Arial', transform=ax.transAxes)
+# plt.title(f'BC Comparison: GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial') # PM$_{{2.5}}$
 
-    # Find the nearest simulation lat/lon neighbors for each observation
-    match_obs_lon = np.zeros(len(obs_lon))
-    match_obs_lat = np.zeros(len(obs_lon))
-    match_obs = np.zeros(len(obs_lon))
-    match_sim_lon = np.zeros(len(obs_lon))
-    match_sim_lat = np.zeros(len(obs_lon))
-    match_sim = np.zeros(len(obs_lon))
+# Create an inset axes for the color bar at the left middle of the plot
+cbar_axes = inset_axes(ax,
+                           width='1.5%',
+                           height='50%',
+                           bbox_to_anchor=(-0.95, -0.45, 1, 1),  # (x, y, width, height) relative to top-right corner
+                           bbox_transform=ax.transAxes,
+                           borderpad=0,
+                           )
+cbar = plt.colorbar(im, cax=cbar_axes, orientation="vertical")
+font_properties = font_manager.FontProperties(family='Arial', size=12)
+cbar.set_ticks([0, 5, 10, 15, 20], fontproperties=font_properties)
+cbar.ax.set_ylabel(f'{species} (µg/m$^3$)', labelpad=10, fontproperties=font_properties)
+cbar.ax.tick_params(axis='y', labelsize=12)
+cbar.outline.set_edgecolor('black')
+cbar.outline.set_linewidth(1)
 
-    # Calculate distance between the observation and all simulation points
-    for k in range(len(obs_lon)):
-        # Spherical law of cosines:
-        R = 6371  # Earth radius 6371 km
-        buffer = 10
-        latk = obs_lat.iloc[k]  # Use .iloc to access value by integer location
-        lonk = obs_lon.iloc[k]  # Use .iloc to access value by integer location
-        # Select simulation points within a buffer around the observation's lat/lon
-        ind = np.where((sim_lon > lonk - buffer) & (sim_lon < lonk + buffer)
-                       & (sim_lat > latk - buffer) & (sim_lat < latk + buffer))
-        # Extract relevant simulation data
-        sim_lonk = sim_lon[ind]
-        sim_latk = sim_lat[ind]
-        sim_conck = sim_conc[ind]
-        # Calculate distance between the observation and selected simulation points
-        dd = np.arccos(np.sin(latk * np.pi / 180) * np.sin(sim_latk * np.pi / 180) + \
-                       np.cos(latk * np.pi / 180) * np.cos(sim_latk * np.pi / 180) * np.cos(
-            (sim_lonk - lonk) * np.pi / 180)) * R
-        ddmin = np.nanmin(dd)
-        ii = np.where(dd == ddmin)
-        # Use iloc to access the element by integer position
-        match_obs[k] = obs_conc.iloc[k]
-        match_sim[k] = np.nanmean(sim_conck[ii])
-        match_sim_lat[k] = np.nanmean(sim_latk[ii])
-        match_sim_lon[k] = np.nanmean(sim_lonk[ii])
-
-    # Get unique lat/lon and average observation data at the same simulation box
-    coords = np.concatenate((match_sim_lat[:, None], match_sim_lon[:, None]), axis=1)
-    coords_u, ind, ct = np.unique(coords, return_index=True, return_counts=True, axis=0)
-    match_lon_u = match_sim_lon[ind]
-    match_lat_u = match_sim_lat[ind]
-    match_sim_u = match_sim[ind]
-    # Calculate the monthly average observation data for each unique simulation box
-    match_obs_u = np.zeros(len(ct))
-    for i in range(len(ct)):
-        irow = np.where((coords == coords_u[i]).all(axis=1))
-        match_obs_u[i] = np.nanmean(match_obs[irow])
-
-    # Drop rows with NaN values from the final data
-    nanindex = np.argwhere(
-        (np.isnan(match_lon_u) | np.isnan(match_lat_u) | np.isnan(match_sim_u) | np.isnan(match_obs_u))).squeeze()
-    match_lon_u = np.delete(match_lon_u, nanindex)
-    match_lat_u = np.delete(match_lat_u, nanindex)
-    match_sim_u = np.delete(match_sim_u, nanindex)
-    match_obs_u = np.delete(match_obs_u, nanindex)
-
-    # Create DataFrame for current month
-    columns = ['lat', 'lon', 'sim', 'obs', 'num_obs']
-    compr_data = np.concatenate(
-        (match_lat_u[:, None], match_lon_u[:, None], match_sim_u[:, None], match_obs_u[:, None], ct[:, None]), axis=1)
-    compr_df = pd.DataFrame(data=compr_data, index=None, columns=columns)
-
-    # Function to find matching rows and add 'Country' and 'City'
-    def find_and_add_location(lat, lon):
-        for index, row in obs_df.iterrows():
-            if abs(row['Latitude'] - lat) <= 0.3 and abs(row['Longitude'] - lon) <= 0.3:
-                return row['Country'], row['City']
-        return None, None
-    compr_df[['country', 'city']] = compr_df.apply(lambda row: find_and_add_location(row['lat'], row['lon']), axis=1,
-                                                   result_type='expand')
-    print(compr_df)
-
-    # Append data to the monthly_data list
-    monthly_data.append(compr_df)
-    # Calculate mean, sd, and max for simulated and observed concentrations
-    mean_sim = np.nanmean(match_sim_u)
-    sd_sim = np.nanstd(match_sim_u)
-    max_sim = np.nanmax(match_sim_u)
-    mean_obs = np.nanmean(match_obs_u)
-    sd_obs = np.nanstd(match_obs_u)
-    max_obs = np.nanmax(match_obs_u)
-    # Print the results
-    print(f'Simulated_{species}_in_{mon} Mean: {mean_sim:.2f}, SD: {sd_sim:.2f}, Max: {max_sim:.2f}')
-    print(f'Observed_{species}_in_{mon} Mean: {mean_obs:.2f}, SD: {sd_obs:.2f}, Max: {max_obs:.2f}')
-
-# Combine monthly data to create the annual DataFrame
-monthly_df = pd.concat(monthly_data, ignore_index=True)
-annual_df = monthly_df.groupby(['country', 'city']).agg({
-    'sim': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
-    'obs': ['mean', lambda x: np.std(x) / np.sqrt(len(x))],
-    'num_obs': 'sum',
-    'lat': 'mean',
-    'lon': 'mean'
-}).reset_index()
-annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
-with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_other_{}_{}_Summary_forRvision_2month.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
-    monthly_df.to_excel(writer, sheet_name='Mon', index=False)
-    annual_df.to_excel(writer, sheet_name='Annual', index=False)
-sim_df.close()
+# plt.savefig(out_dir + 'FigS2_WorldMap_{}_{}_{}_Sim_vs_SPARTAN_{}_{}_FTIR_OM.tiff'.format(cres, inventory, deposition, species, year), dpi=600)
+plt.show()
