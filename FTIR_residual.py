@@ -1160,7 +1160,7 @@ plt.tight_layout()
 
 plt.show()
 ################################################################################################
-# reate scatter plot for collocation comparison
+# Create scatter plot for collocation comparison
 ################################################################################################
 # Define a function to calculate the perpendicular distance from a point to the 1:1 line (y=x)
 def perpendicular_distance(x, y): # scale dependent

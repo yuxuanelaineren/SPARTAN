@@ -43,174 +43,116 @@ out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.forma
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
-# Create scatter plot: sim vs meas, color blue and red with two lines, Beijing grey out
+# Create scatter plot for HIPS vs UV-Vis vs FT-IR, Dhaka
 ################################################################################################
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = 1 * compr_df['obs']
-compr_df['obs_se'] = 1 * compr_df['obs_se']
+compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_UV-Vis_SPARTAN.xlsx', sheet_name='HIPS_UV-Uis')
+compr_df['HIPS'] = compr_df['BC_HIPS_(ug/m3)']
+compr_df['UV-Vis'] = compr_df['BC_UV-Vis_(ug/m3)']
+# compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_EC_FTIR_SPARTAN.xlsx', sheet_name='All')
+# compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_BC_FT-IR_EC_20250319.xlsx', sheet_name='EC_batch234_HIPS_BC')
+# compr_df['HIPS'] = compr_df['BC']
+# compr_df['FT-IR'] = compr_df['EC']
+compr_df = compr_df[compr_df['City'].isin(['Dhaka'])]
+# compr_df = compr_df[compr_df['City'].isin(['Dhaka, Addis Ababa'])]
+# # Define custom color mapping
+# color_map = {'Dhaka': 'red', 'Addis Ababa': 'blue'}
+color_map = {'Dhaka': 'red'}
 
-# Print the names of each city
-unique_cities = compr_df['city'].unique()
-for city in unique_cities:
-    print(f"City: {city}")
-
-# Define the range of x-values for the two segments
-x_range_1 = [compr_df['obs'].min(), 1.35*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g,
-x_range_2 = [1.4*1, compr_df['obs'].max()]
-
-# Define custom blue and red colors
-blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
-red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
-# Create custom colormap
-blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
-red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
-
-# Create a custom color palette mapping each city to a color based on observed values
-def map_city_to_color(city, obs):
-    if city == 'Beijing':  # Mark Beijing grey
-        return 'grey'
-    elif x_range_1[0] <= obs <= x_range_1[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
-        return blue_cmap(obs_index)
-    elif x_range_2[0] <= obs <= x_range_2[1]:
-        index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()).index(obs)
-        obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()) - 1)
-        return red_cmap(obs_index)
-    else:
-        return 'black'
-
-# city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city'], compr_df['obs'])]
-city_palette = [map_city_to_color(city, obs) if city != 'Singapore' else blue_cmap(0.5)
-                for city, obs in zip(compr_df['city'], compr_df['obs'])]
-# Sort the cities in the legend based on observed values
-sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
-
-# Classify 'city' based on 'region'
-def get_region_for_city(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            return region
-    print(f"Region not found for city: {city}")
-    return None
-region_mapping = {
-    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
-    'Australia': ['Melbourne'],
-    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
-    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
-    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
-    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
-    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
-}
-region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
-region_markers = {
-    'North America': ['o', 'o', 'o', 'p', 'H', '*'],
-    'Australia': ['o', '^', 's', 'p', 'H', '*'],
-    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
-    'Africa': ['o', 'o', 'o', 'o', 'o', 'o'],
-    'South America': ['o', '^', 's', 'p', 'H', '*'],
-}
-# Create an empty list to store the city_marker for each city
-city_marker = []
-city_marker_match = []
-def map_city_to_marker(city):
-    for region, cities in region_mapping.items():
-        if city in cities:
-            if region == 'North America':
-                return 'd'
-            elif region == 'Australia':
-                return '*'
-            elif region == 'East Asia':
-                return '^'
-            elif region == 'Central Asia':
-                return 'p'
-            elif region == 'South Asia':
-                return 's'
-            elif region == 'Africa':
-                return 'o'
-            elif region == 'South America':
-                return 'o'
-            else:
-                return 'o'  # Default marker style
-    print(f"City not found in any region: {city}")
-    return 'o'
-# Iterate over each unique city and map it to a marker
-for city in unique_cities:
-    marker = map_city_to_marker(city)
-    if marker is not None:
-        city_marker.append(marker)
-        city_marker_match.append({'city': city, 'marker': marker})
+# Calculate mean and standard error grouped by City
+summary_stats = compr_df.groupby('City').agg(
+    OM_mean=('HIPS', 'mean'),
+    OM_se=('HIPS', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_mean=('UV-Vis', 'mean'),
+    Residual_se=('UV-Vis', lambda x: x.std() / np.sqrt(len(x)))
+).reset_index()
 
 # Create figure and axes objects
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(8, 7))
+
+# Create scatter plot with white background, black border, and no grid
 sns.set(font='Arial')
-# Add 1:1 line with grey dash
-plt.plot([-0.5, 6.2], [-0.5, 6.2], color=(0.75, 0.75, 0.75), linestyle='--', linewidth=1, zorder=1) # color='grey'
-# # Add error bars
-# for i in range(len(compr_df)):
-#     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
-#                 xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
-#                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
-# Create scatter plot
-scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
-
-# Customize axis spines
-for spine in ax.spines.values():
-    spine.set_edgecolor('black')
-    spine.set_linewidth(1)
-
-# Customize legend markers
-handles, labels = scatterplot.get_legend_handles_labels()
-sorted_handles = [handles[list(labels).index(city)] for city in sorted_cities]
+scatterplot = sns.scatterplot(x='HIPS', y='UV-Vis', data=compr_df, hue='City', palette=color_map, s=60, alpha=1, edgecolor='k', style='City')
+scatterplot.set_facecolor('white')  # set background color to white
 border_width = 1
-# Customize legend order
-legend = plt.legend(handles=sorted_handles, labels=sorted_cities, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12, markerscale=1.25)
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Create legend with custom handles
+legend = plt.legend(facecolor='white', bbox_to_anchor=(0.75, 0.05), loc='lower left', fontsize=11.5)
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
-plt.xlim([-0.5, 11])
-plt.ylim([-0.5, 11])
-plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
-plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.title('HIPS vs UV-Vis', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([0, 20])
+plt.ylim([0, 20])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
 scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
 scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
 
-# Perform linear regression for the first segment
-mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
-# mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
-slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
-# Perform linear regression for the second segment
-mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
-# mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
-slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
-# Plot regression lines
-sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
-            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# Add 1:1 line with grey dash
+plt.plot([-10, 80], [-10, 80], color='grey', linestyle='--', linewidth=1)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['HIPS'].min(), compr_df['HIPS'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['HIPS'] >= x_range[0]) & (compr_df['HIPS'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['HIPS'][mask], compr_df['UV-Vis'][mask])
+# # Plot regression lines
+# sns.regplot(x='OM', y='Residual', data=compr_df[mask],
+#             scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
+
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    # nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    nmd = np.sum(sim - obs) / np.sum(obs) * 100
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMB (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='HIPS', sim_col='UV-Vis')
+nmd = nmd_nrmsd_results['NMB (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
 
 # Add text with linear regression equations and other statistics
-intercept_display_1 = abs(intercept_1)
-intercept_display_2 = abs(intercept_2)
-intercept_sign_1 = '-' if intercept_1 < 0 else '+'
-intercept_sign_2 = '-' if intercept_2 < 0 else '+'
-plt.text(0.6, 0.83, f'y = {slope_1:.1f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
-         transform=scatterplot.transAxes, fontsize=18, color='blue')
-plt.text(0.6, 0.61, f'y = {slope_2:.3f}x {intercept_sign_2} {intercept_display_2:.1f}\n$r^2$ = {r_value_2 ** 2:.5f}',
-         transform=scatterplot.transAxes, fontsize=18, color='red')
-# Add the number of data points for each segment
-num_points_1 = mask_1.sum()
-plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
-num_points_2 = mask_2.sum()
-plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+num_points = mask.sum()
+plt.text(0.05, 0.70, f'y = {slope:.1f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\nN = {num_points}\nNMB = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=scatterplot.transAxes, fontsize=16, color='black')
 
 # Set labels
-plt.xlabel('HIPS Measured Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('HIPS BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('UV-Vis BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10_BeijingGrey_lightgrey.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_vs_UV-Vis_Dhaka.svg', dpi=300)
+
 plt.show()
