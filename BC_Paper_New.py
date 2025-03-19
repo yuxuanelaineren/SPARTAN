@@ -3212,3 +3212,259 @@ plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fon
 plt.tight_layout()
 # plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC7+13_BeijingGrey.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()
+
+################################################################################################
+# Create scatter plot for HIPS vs UV-Vis vs FT-IR, Dhaka
+################################################################################################
+# Read the file
+compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_UV-Vis_SPARTAN.xlsx', sheet_name='HIPS_UV-Uis')
+compr_df['HIPS'] = compr_df['BC_HIPS_(ug/m3)']
+compr_df['UV-Vis'] = compr_df['BC_UV-Vis_(ug/m3)']
+# compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_EC_FTIR_SPARTAN.xlsx', sheet_name='All')
+# compr_df['HIPS'] = compr_df['BC']
+# compr_df['FT-IR'] = compr_df['EC']
+compr_df = compr_df[compr_df['City'].isin(['Dhaka'])]
+# compr_df = compr_df[compr_df['City'].isin(['Dhaka, Addis Ababa'])]
+# # Define custom color mapping
+# color_map = {'Dhaka': 'red', 'Addis Ababa': 'blue'}
+color_map = {'Dhaka': 'red'}
+
+# Calculate mean and standard error grouped by City
+summary_stats = compr_df.groupby('City').agg(
+    OM_mean=('HIPS', 'mean'),
+    OM_se=('HIPS', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_mean=('UV-Vis', 'mean'),
+    Residual_se=('UV-Vis', lambda x: x.std() / np.sqrt(len(x)))
+).reset_index()
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 7))
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='HIPS', y='UV-Vis', data=compr_df, hue='City', palette=color_map, s=60, alpha=1, edgecolor='k', style='City')
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Create legend with custom handles
+legend = plt.legend(facecolor='white', bbox_to_anchor=(0.75, 0.05), loc='lower left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+plt.title('HIPS vs UV-Vis', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([0, 20])
+plt.ylim([0, 20])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with grey dash
+plt.plot([-10, 80], [-10, 80], color='grey', linestyle='--', linewidth=1)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['HIPS'].min(), compr_df['HIPS'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['HIPS'] >= x_range[0]) & (compr_df['HIPS'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['HIPS'][mask], compr_df['UV-Vis'][mask])
+# # Plot regression lines
+# sns.regplot(x='OM', y='Residual', data=compr_df[mask],
+#             scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
+
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    # nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    nmd = np.sum(sim - obs) / np.sum(obs) * 100
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMB (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='HIPS', sim_col='UV-Vis')
+nmd = nmd_nrmsd_results['NMB (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+num_points = mask.sum()
+plt.text(0.05, 0.70, f'y = {slope:.1f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\nN = {num_points}\nNMB = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=scatterplot.transAxes, fontsize=16, color='black')
+
+# Set labels
+plt.xlabel('HIPS BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('UV-Vis BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_vs_UV-Vis_Dhaka.svg', dpi=300)
+
+plt.show()
+################################################################################################
+# Match all FTIR_EC and HIPS_BC
+################################################################################################
+# Read data
+FTIR_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/FTIR/'
+HIPS_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/BC_HIPS_SPARTAN_afterScreening.xlsx', sheet_name='All')
+HIPS_df['Date'] = pd.to_datetime(
+    HIPS_df['start_year'].astype(str) + '-' + HIPS_df['start_month'].astype(str) + '-' + HIPS_df['start_day'].astype(str))
+site_df = pd.read_excel(os.path.join(site_dir, 'Site_details.xlsx'), usecols=['Site_Code', 'Country', 'City'])
+FTIR_b4_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_summary_20250218.xlsx'), sheet_name='batch4_2024_03', usecols=['site', 'date', 'FTIR_EC'], skiprows=1)
+FTIR_b2_b3_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_summary_20250218.xlsx'), sheet_name='batch2_v3_batch3_v2', usecols=['site', 'date', 'FTIR_EC'], skiprows=1)
+FTIR_b1_df = pd.read_excel(os.path.join(FTIR_dir, 'FTIR_summary_20250218.xlsx'), sheet_name='batch1_2020_08', usecols=['Site', 'Date', 'FTIR_EC'])
+FTIR_b4_df.rename(columns={'FTIR_EC': 'EC', 'site': 'Site', 'date': 'Date'}, inplace=True)
+FTIR_b2_b3_df.rename(columns={'FTIR_EC': 'EC', 'site': 'Site', 'date': 'Date'}, inplace=True)
+# Add a 'batch' column to each DataFrame
+FTIR_b4_df['batch'] = 'batch4_2024_03'
+FTIR_b2_b3_df['batch'] = 'batch2_2022_06_batch3_2023_03'
+FTIR_b1_df['batch'] = 'batch1_2020_08'
+FTIR_df = pd.concat([FTIR_b4_df, FTIR_b2_b3_df]) # exlcude batch 1 as no lot specific calibrations
+# Merge Residual and OM df based on matching values of "Site" and "Date"
+merged_df = pd.merge(HIPS_df, FTIR_df, on=['Site', 'Date'], how='inner')
+merged_df.rename(columns={'BC': 'BC'}, inplace=True)
+# merged_df.rename(columns={'Country': 'country'}, inplace=True)
+# merged_df.rename(columns={'City': 'city'}, inplace=True)
+# Write to Excel
+with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_BC_FT-IR_EC_20250319.xlsx', engine='openpyxl', mode='w') as writer: # write mode
+    merged_df.to_excel(writer, sheet_name='EC_batch234_HIPS_BC', index=False)
+
+################################################################################################
+# Create scatter plot for HIPS vs UV-Vis vs FT-IR, Dhaka
+################################################################################################
+# Read the file
+compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_UV-Vis_SPARTAN.xlsx', sheet_name='HIPS_UV-Uis')
+compr_df['HIPS'] = compr_df['BC_HIPS_(ug/m3)']
+compr_df['UV-Vis'] = compr_df['BC_UV-Vis_(ug/m3)']
+# compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC_old/BC_HIPS_EC_FTIR_SPARTAN.xlsx', sheet_name='All')
+# compr_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_BC_FT-IR_EC_20250319.xlsx', sheet_name='EC_batch234_HIPS_BC')
+# compr_df['HIPS'] = compr_df['BC']
+# compr_df['FT-IR'] = compr_df['EC']
+compr_df = compr_df[compr_df['City'].isin(['Dhaka'])]
+# compr_df = compr_df[compr_df['City'].isin(['Dhaka, Addis Ababa'])]
+# # Define custom color mapping
+# color_map = {'Dhaka': 'red', 'Addis Ababa': 'blue'}
+color_map = {'Dhaka': 'red'}
+
+# Calculate mean and standard error grouped by City
+summary_stats = compr_df.groupby('City').agg(
+    OM_mean=('HIPS', 'mean'),
+    OM_se=('HIPS', lambda x: x.std() / np.sqrt(len(x))),
+    Residual_mean=('UV-Vis', 'mean'),
+    Residual_se=('UV-Vis', lambda x: x.std() / np.sqrt(len(x)))
+).reset_index()
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 7))
+
+# Create scatter plot with white background, black border, and no grid
+sns.set(font='Arial')
+scatterplot = sns.scatterplot(x='HIPS', y='UV-Vis', data=compr_df, hue='City', palette=color_map, s=60, alpha=1, edgecolor='k', style='City')
+scatterplot.set_facecolor('white')  # set background color to white
+border_width = 1
+for spine in scatterplot.spines.values():
+    spine.set_edgecolor('black')  # set border color to black
+    spine.set_linewidth(border_width)  # set border width
+scatterplot.grid(False)  # remove the grid
+
+# Create legend with custom handles
+legend = plt.legend(facecolor='white', bbox_to_anchor=(0.75, 0.05), loc='lower left', fontsize=11.5)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+plt.title('HIPS vs UV-Vis', fontsize=18, fontname='Arial', y=1.03)
+plt.xlim([0, 20])
+plt.ylim([0, 20])
+plt.xticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+plt.yticks([0, 5, 10, 15, 20], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Add 1:1 line with grey dash
+plt.plot([-10, 80], [-10, 80], color='grey', linestyle='--', linewidth=1)
+
+# Define the range of x-values for the two segments
+x_range = [compr_df['HIPS'].min(), compr_df['HIPS'].max()]
+# Perform linear regression for all segments
+mask = (compr_df['HIPS'] >= x_range[0]) & (compr_df['HIPS'] <= x_range[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['HIPS'][mask], compr_df['UV-Vis'][mask])
+# # Plot regression lines
+# sns.regplot(x='OM', y='Residual', data=compr_df[mask],
+#             scatter=False, ci=None, line_kws={'color': 'black', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add columns for normalized mean difference (NMD) and normalized root mean square difference (NRMSD)
+def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
+    """
+    Calculate normalized mean difference (NMD) and normalized root mean square difference (NRMSD).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing observation and simulation columns.
+        obs_col (str): Column name for observations.
+        sim_col (str): Column name for simulations.
+
+    Returns:
+        dict: Dictionary containing NMD and NRMSD values.
+    """
+    obs = df[obs_col].values
+    sim = df[sim_col].values
+    # Remove rows with NaN values
+    valid_indices = ~np.isnan(obs) & ~np.isnan(sim)
+    obs = obs[valid_indices]
+    sim = sim[valid_indices]
+    # Check if there are valid data points
+    if len(obs) == 0:
+        return {'NMD (%)': np.nan, 'NRMSD (%)': np.nan}
+    # Calculate NMD
+    # nmd = np.mean((sim - obs) / obs) * 100  # Percentage
+    nmd = np.sum(sim - obs) / np.sum(obs) * 100
+    # Calculate NRMSD
+    rmsd = np.sqrt(np.mean((sim - obs) ** 2))
+    mean_obs = np.mean(obs)
+    nrmsd = (rmsd / mean_obs) * 100  # Percentage
+    return {'NMB (%)': nmd, 'NRMSD (%)': nrmsd}
+# Perform the calculations for the entire dataset
+nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='HIPS', sim_col='UV-Vis')
+nmd = nmd_nrmsd_results['NMB (%)']
+nrmsd = nmd_nrmsd_results['NRMSD (%)']
+
+# Add text with linear regression equations and other statistics
+intercept_display = abs(intercept)
+intercept_sign = '-' if intercept < 0 else '+'
+num_points = mask.sum()
+plt.text(0.05, 0.70, f'y = {slope:.1f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\nN = {num_points}\nNMB = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+         transform=scatterplot.transAxes, fontsize=16, color='black')
+
+# Set labels
+plt.xlabel('HIPS BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('UV-Vis BC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_vs_UV-Vis_Dhaka.svg', dpi=300)
+
+plt.show()
