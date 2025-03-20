@@ -23,12 +23,20 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.colors as mcolors
 import matplotlib.dates as mdates
 
+cres = 'C360'
+year = 2019
+species = 'BC_OA'
+inventory = 'CEDS'
+deposition = 'noLUO'
+
 # Set the directory path
 FTIR_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/FTIR/'
 Residual_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Public_Data/RCFM/' # old algrothrm
 OMOC_dir = '/Volumes/rvmartin/Active/ren.yuxuan/RCFM/FTIR_OC_OMOC_Residual/OM_OC/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/'
+sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-output/monthly/'.format(cres.lower(), deposition) # CEDS, C360, noLUO
+
 ################################################################################################
 # Match FTIR_OM, FTIR_OC, and Residual from SPARTAN
 ################################################################################################

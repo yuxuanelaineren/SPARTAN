@@ -3468,3 +3468,300 @@ plt.tight_layout()
 # plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/HIPS_vs_UV-Vis_Dhaka.svg', dpi=300)
 
 plt.show()
+################################################################################################
+# Fe interference on BC
+################################################################################################
+# Read the input Excel file
+obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/Fe_BC_HIPS_SPARTAN.xlsx',
+                       sheet_name='All')
+
+# Group by 'Site', 'Country', 'City', and 'start_month', and calculate monthly mean, median, and count for each column
+obs_monthly_df = obs_df.groupby(['Site', 'Country', 'City', 'start_month']).agg(
+    monthly_mean_BC=('BC', 'mean'),
+    monthly_median_BC=('BC', 'median'),
+    monthly_count_BC=('BC', 'count'),
+    monthly_mean_Fe=('Fe', 'mean'),
+    monthly_median_Fe=('Fe', 'median'),
+    monthly_count_Fe=('Fe', 'count'),
+    monthly_mean_Fe_BC=('Fe_BC', 'mean'),
+    monthly_median_Fe_BC=('Fe_BC', 'median'),
+    monthly_count_Fe_BC=('Fe_BC', 'count'),
+    monthly_mean_Fe_PM25=('Fe_PM25', 'mean'),
+    monthly_median_Fe_PM25=('Fe_PM25', 'median'),
+    monthly_count_Fe_PM25=('Fe_PM25', 'count')
+).reset_index()
+
+# Calculate the annual averages for each 'Site', 'Country', 'City' based on the monthly values
+obs_annual_df = obs_monthly_df.groupby(['Site', 'Country', 'City']).agg(
+    annual_mean_BC=('monthly_mean_BC', 'mean'),
+    annual_median_BC=('monthly_median_BC', 'median'),
+    annual_count_BC=('monthly_count_BC', 'sum'),  # Count for the entire year
+    annual_se_BC=('monthly_mean_BC', lambda x: np.std(x, ddof=1) / np.sqrt(len(x))),  # SE = std / sqrt(n)
+
+    annual_mean_Fe=('monthly_mean_Fe', 'mean'),
+    annual_median_Fe=('monthly_median_Fe', 'median'),
+    annual_count_Fe=('monthly_count_Fe', 'sum'),
+    annual_se_Fe=('monthly_mean_Fe', lambda x: np.std(x, ddof=1) / np.sqrt(len(x))),
+
+    annual_mean_Fe_BC=('monthly_mean_Fe_BC', 'mean'),
+    annual_median_Fe_BC=('monthly_median_Fe_BC', 'median'),
+    annual_count_Fe_BC=('monthly_count_Fe_BC', 'sum'),
+    annual_se_Fe_BC=('monthly_mean_Fe_BC', lambda x: np.std(x, ddof=1) / np.sqrt(len(x))),  # SE = std / sqrt(n)
+
+    annual_mean_Fe_PM25=('monthly_mean_Fe_PM25', 'mean'),
+    annual_median_Fe_PM25=('monthly_median_Fe_PM25', 'median'),
+    annual_count_Fe_PM25=('monthly_count_Fe_PM25', 'sum'),
+    annual_se_Fe_PM25=('monthly_mean_Fe_PM25', lambda x: np.std(x, ddof=1) / np.sqrt(len(x)))  # SE = std / sqrt(n)
+).reset_index()
+
+# Save the results to Excel with separate sheets for monthly and annual data
+with pd.ExcelWriter('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/Fe_BC_HIPS_SPARTAN.xlsx',
+                    engine='openpyxl', mode='a') as writer:
+    obs_monthly_df.to_excel(writer, sheet_name='Mon', index=False)
+    obs_annual_df.to_excel(writer, sheet_name='Annual', index=False)
+
+# Read the annual data from the Excel sheet
+obs_annual_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/Fe_BC_HIPS_SPARTAN.xlsx', sheet_name='Annual')
+
+# Multiply annual BC by 0.1
+obs_annual_df['annual_mean_BC_adjusted'] = obs_annual_df['annual_mean_BC'] * 0.1
+obs_annual_df['annual_mean_Fe_PM25_adjusted'] = obs_annual_df['annual_mean_Fe_PM25'] * 10
+# Set up the plot style using seaborn
+sns.set(style="whitegrid")
+
+# Create the figure
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Set positions for the bars (x-axis positions)
+x_pos = np.arange(len(obs_annual_df))
+
+# Define bar width
+bar_width = 0.2
+
+# Plot all four bars side by side for each city
+ax.bar(x_pos - 1.5*bar_width, obs_annual_df['annual_mean_BC_adjusted'], width=bar_width, label='BC × 0.1', color='b')
+ax.bar(x_pos - 0.5*bar_width, obs_annual_df['annual_mean_Fe'], width=bar_width, label='Fe', color='g')
+ax.bar(x_pos + 0.5*bar_width, obs_annual_df['annual_mean_Fe_BC'], width=bar_width, label='Fe-to-BC ratio', color='r')
+ax.bar(x_pos + 1.5*bar_width, obs_annual_df['annual_mean_Fe_PM25_adjusted'], width=bar_width, label=r'Fe-to-PM$_{2.5}$ ratio × 10', color='orange')
+
+# Customize the plot
+plt.ylim([0, 1])
+ax.set_xlabel('City', fontsize=14)
+ax.set_ylabel('Concentration (µg/m$^3$) or Ratio', fontsize=14)
+ax.set_xticks(x_pos)
+ax.set_xticklabels(obs_annual_df['City'], rotation=45, ha='right')
+# ax.set_title('BC and Fe by City', fontsize=16)
+
+# Add legend
+ax.legend()
+
+# Show the plot
+plt.tight_layout()
+
+# plt.savefig('/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/SPARTAN_BC/Fe_BC_HIPS_SPARTAN.svg', dpi=300)
+plt.show()
+
+###############################################################################################
+# Create scatter plot: sim vs meas, color blue and red with two lines, Beijing grey out for Fe interference
+################################################################################################
+# Read the file
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}_Summary.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+compr_df['obs'] = 1 * compr_df['obs_corrected']
+compr_df['obs_se'] = 1 * compr_df['obs_corrected_se']
+
+# Print the names of each city
+unique_cities = compr_df['city'].unique()
+for city in unique_cities:
+    print(f"City: {city}")
+
+# Define the range of x-values for the two segments
+x_range_1 = [(compr_df['obs'].min(), 1.05), (1.10, 1.2)]  # Two separate sub-ranges
+x_range_2 = [1.2, compr_df['obs'].max()]
+
+#
+# x_range_1 = [compr_df['obs'].min(), 1.2*1] # 1 for MAC=10m2/g, 10/7 for MAC=7m2/g, 10/13 for MAC=13m2/g,
+# x_range_2 = [1.2*1, compr_df['obs'].max()]
+
+# Define custom blue and red colors
+blue_colors = [(0.7, 0.76, 0.9),  (0.431, 0.584, 1), (0.4, 0.5, 0.9), (0, 0.27, 0.8),  (0, 0, 1), (0, 0, 0.6)]
+red_colors = [(0.9, 0.6, 0.6), (1, 0.4, 0.4), (1, 0, 0), (0.8, 0, 0), (0.5, 0, 0)]
+# Create custom colormap
+blue_cmap = LinearSegmentedColormap.from_list('blue_cmap', blue_colors)
+red_cmap = LinearSegmentedColormap.from_list('red_cmap', red_colors)
+
+# Create a custom color palette mapping each city to a color based on observed values
+# def map_city_to_color(city, obs):
+#     if city == 'Beijing':  # Mark Beijing grey
+#         return 'grey'
+#     elif x_range_1[0] <= obs <= x_range_1[1]:
+#         index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()).index(obs)
+#         obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_1[0], x_range_1[1])]['obs'].unique()) - 1)
+#         return blue_cmap(obs_index)
+#     elif x_range_2[0] <= obs <= x_range_2[1]:
+#         index_within_range = sorted(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()).index(obs)
+#         obs_index = index_within_range / (len(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique()) - 1)
+#         return red_cmap(obs_index)
+#     else:
+#         return 'black'
+def map_city_to_color(city, obs):
+    if city == 'Beijing':  # Mark Beijing grey
+        return 'grey'
+
+    # Define the two sub-ranges for x_range_1
+    in_range_1 = (x_range_1[0][0] <= obs <= x_range_1[0][1]) or (x_range_1[1][0] <= obs <= x_range_1[1][1])
+    in_range_2 = x_range_2[0] <= obs <= x_range_2[1]
+
+    if in_range_1:
+        valid_obs = sorted(compr_df[compr_df['obs'].between(x_range_1[0][0], x_range_1[0][1]) |
+                                    compr_df['obs'].between(x_range_1[1][0], x_range_1[1][1])]['obs'].unique())
+        obs_index = valid_obs.index(obs) / (len(valid_obs) - 1) if len(valid_obs) > 1 else 0
+        return blue_cmap(obs_index)
+
+    elif in_range_2:
+        valid_obs = sorted(compr_df[compr_df['obs'].between(x_range_2[0], x_range_2[1])]['obs'].unique())
+        obs_index = valid_obs.index(obs) / (len(valid_obs) - 1) if len(valid_obs) > 1 else 0
+        return red_cmap(obs_index)
+
+    return 'black'  # Default color for out-of-range values
+
+# city_palette = [map_city_to_color(city, obs) for city, obs in zip(compr_df['city'], compr_df['obs'])]
+city_palette = [map_city_to_color(city, obs) if city != 'Singapore' else blue_cmap(0.5)
+                for city, obs in zip(compr_df['city'], compr_df['obs'])]
+# Sort the cities in the legend based on observed values
+sorted_cities = sorted(compr_df['city'].unique(), key=lambda city: compr_df.loc[compr_df['city'] == city, 'obs'].iloc[0])
+
+# Classify 'city' based on 'region'
+def get_region_for_city(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            return region
+    print(f"Region not found for city: {city}")
+    return None
+region_mapping = {
+    'North America': ['Downsview', 'Halifax', 'Kelowna', 'Lethbridge', 'Sherbrooke', 'Baltimore', 'Bondville', 'Mammoth Cave', 'Norman', 'Pasadena', 'Fajardo', 'Mexico City'],
+    'Australia': ['Melbourne'],
+    'East Asia': ['Beijing', 'Seoul', 'Ulsan', 'Kaohsiung', 'Taipei'],
+    'Central Asia': ['Abu Dhabi', 'Haifa', 'Rehovot'],
+    'South Asia': ['Dhaka', 'Bandung', 'Delhi', 'Kanpur', 'Manila', 'Singapore', 'Hanoi'],
+    'Africa': ['Bujumbura', 'Addis Ababa', 'Ilorin', 'Johannesburg', 'Pretoria'],
+    'South America': ['Buenos Aires', 'Santiago', 'Palmira'],
+}
+region_mapping = {region: [city for city in cities if city in unique_cities] for region, cities in region_mapping.items()}
+region_markers = {
+    'North America': ['o', 'o', 'o', 'p', 'H', '*'],
+    'Australia': ['o', '^', 's', 'p', 'H', '*'],
+    'East Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Central Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'South Asia': ['o', '^', 's', 'p', 'H', '*'],
+    'Africa': ['o', 'o', 'o', 'o', 'o', 'o'],
+    'South America': ['o', '^', 's', 'p', 'H', '*'],
+}
+# Create an empty list to store the city_marker for each city
+city_marker = []
+city_marker_match = []
+def map_city_to_marker(city):
+    for region, cities in region_mapping.items():
+        if city in cities:
+            if region == 'North America':
+                return 'd'
+            elif region == 'Australia':
+                return '*'
+            elif region == 'East Asia':
+                return '^'
+            elif region == 'Central Asia':
+                return 'p'
+            elif region == 'South Asia':
+                return 's'
+            elif region == 'Africa':
+                return 'o'
+            elif region == 'South America':
+                return 'o'
+            else:
+                return 'o'  # Default marker style
+    print(f"City not found in any region: {city}")
+    return 'o'
+# Iterate over each unique city and map it to a marker
+for city in unique_cities:
+    marker = map_city_to_marker(city)
+    if marker is not None:
+        city_marker.append(marker)
+        city_marker_match.append({'city': city, 'marker': marker})
+
+# Create figure and axes objects
+fig, ax = plt.subplots(figsize=(8, 6))
+sns.set(font='Arial')
+# Add 1:1 line with grey dash
+plt.plot([-0.5, 6.2], [-0.5, 6.2], color='grey', linestyle='--', linewidth=1, zorder=1)
+# # Add error bars
+# for i in range(len(compr_df)):
+#     ax.errorbar(compr_df['obs'].iloc[i], compr_df['sim'].iloc[i],
+#                 xerr=compr_df['obs_se'].iloc[i], yerr=compr_df['sim_se'].iloc[i],
+#                 fmt='none', color='k', alpha=1, capsize=2, elinewidth=1, zorder=1) # color=city_palette[i], color='k'
+# Create scatter plot
+scatterplot = sns.scatterplot(x='obs', y='sim', data=compr_df, hue='city', palette=city_palette, s=80, alpha=1, edgecolor='k', style='city', markers=city_marker, zorder=2)
+
+# Customize axis spines
+for spine in ax.spines.values():
+    spine.set_edgecolor('black')
+    spine.set_linewidth(1)
+
+# Customize legend markers
+handles, labels = scatterplot.get_legend_handles_labels()
+sorted_handles = [handles[list(labels).index(city)] for city in sorted_cities]
+border_width = 1
+# Customize legend order
+legend = plt.legend(handles=sorted_handles, labels=sorted_cities, facecolor='white', bbox_to_anchor=(1.03, 0.50), loc='center left', fontsize=12, markerscale=1.25)
+legend.get_frame().set_edgecolor('black')
+
+# Set title, xlim, ylim, ticks, labels
+# plt.title(f'GCHP-v13.4.1 {cres.lower()} {inventory} {deposition} vs SPARTAN', fontsize=16, fontname='Arial', y=1.03)  # PM$_{{2.5}}$
+plt.xlim([-0.5, 11])
+plt.ylim([-0.5, 11])
+plt.xticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+plt.yticks([0, 2, 4, 6, 8, 10], fontname='Arial', size=18)
+scatterplot.tick_params(axis='x', direction='out', width=1, length=5)
+scatterplot.tick_params(axis='y', direction='out', width=1, length=5)
+
+# Perform linear regression for the first segment
+# Define masks for each range separately
+mask_1a = (compr_df['obs'] >= x_range_1[0][0]) & (compr_df['obs'] <= x_range_1[0][1])  # First sub-range [min, 1.05]
+mask_1b = (compr_df['obs'] >= x_range_1[1][0]) & (compr_df['obs'] <= x_range_1[1][1])  # Second sub-range [1.10, 1.2]
+
+# Combine the two masks using bitwise OR (|)
+mask_1 = mask_1a | mask_1b
+
+#
+# mask_1 = (compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])
+# mask_1 = ((compr_df['obs'] >= x_range_1[0]) & (compr_df['obs'] <= x_range_1[1])) | (compr_df['city'] == 'Singapore')
+slope_1, intercept_1, r_value_1, p_value_1, std_err_1 = stats.linregress(compr_df['obs'][mask_1], compr_df['sim'][mask_1])
+# Perform linear regression for the second segment
+mask_2 = (compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])
+# mask_2 = ((compr_df['obs'] >= x_range_2[0]) & (compr_df['obs'] <= x_range_2[1])) & (compr_df['city'] != 'Singapore')
+slope_2, intercept_2, r_value_2, p_value_2, std_err_2 = stats.linregress(compr_df['obs'][mask_2], compr_df['sim'][mask_2])
+# Plot regression lines
+sns.regplot(x='obs', y='sim', data=compr_df[mask_1],
+            scatter=False, ci=None, line_kws={'color': 'blue', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+
+# Add text with linear regression equations and other statistics
+intercept_display_1 = abs(intercept_1)
+intercept_display_2 = abs(intercept_2)
+intercept_sign_1 = '-' if intercept_1 < 0 else '+'
+intercept_sign_2 = '-' if intercept_2 < 0 else '+'
+plt.text(0.6, 0.83, f'y = {slope_1:.1f}x {intercept_sign_1} {intercept_display_1:.2f}\n$r^2$ = {r_value_1 ** 2:.2f}',
+         transform=scatterplot.transAxes, fontsize=18, color='blue')
+plt.text(0.6, 0.61, f'y = {slope_2:.3f}x {intercept_sign_2} {intercept_display_2:.1f}\n$r^2$ = {r_value_2 ** 2:.5f}',
+         transform=scatterplot.transAxes, fontsize=18, color='red')
+# Add the number of data points for each segment
+num_points_1 = mask_1.sum()
+plt.text(0.6, 0.77, f'N = {num_points_1}', transform=scatterplot.transAxes, fontsize=18, color='blue')
+num_points_2 = mask_2.sum()
+plt.text(0.6, 0.55, f'N = {num_points_2}', transform=scatterplot.transAxes, fontsize=18, color='red')
+
+# Set labels
+plt.xlabel('Corrected Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Simulated Black Carbon (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+
+# Show the plot
+plt.tight_layout()
+# plt.savefig(out_dir + 'Fig2_Scatter_{}_{}_{}_vs_SPARTAN_{}_{:02d}_MAC10_BeijingNaN_FeCorrected.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+plt.show()
