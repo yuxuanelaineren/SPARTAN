@@ -24,7 +24,7 @@ import matplotlib.colors as mcolors
 import matplotlib.dates as mdates
 cres = 'C360'
 year = 2019
-species = 'OA'
+species = 'BC_OA'
 inventory = 'CEDS'
 deposition = 'noLUO'
 # Set the directory path
@@ -93,9 +93,9 @@ def calculate_nmd_and_nrmsd(df, obs_col, sim_col):
     nrmsd = (rmsd / mean_obs) * 100  # Percentage
     return {'NMD (%)': nmd, 'NRMSD (%)': nrmsd}
 # Read the file
-compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_SPARTAN_{}_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
-compr_df['obs'] = compr_df['obs_AaronRM']
-compr_df['obs_se'] = compr_df['obs_se_AaronRM']
+compr_df = pd.read_excel(os.path.join(out_dir, '{}_{}_{}_vs_RM_{}_Ratio_{}.xlsx'.format(cres, inventory, deposition, species, year)), sheet_name='Annual')
+# compr_df['obs'] = compr_df['obs_AaronRM']
+# compr_df['obs_se'] = compr_df['obs_se_AaronRM']
 # Print the names of each city
 unique_cities = compr_df['city'].unique()
 for city in unique_cities:
@@ -224,19 +224,19 @@ legend = plt.legend(handles=legend_handles, facecolor='white', markerscale=0.85,
 legend.get_frame().set_edgecolor('black')
 
 # Set title, xlim, ylim, ticks, labels
-plt.title('Aaron Residual vs CEDS C360 noLUO OA', fontsize=16, fontname='Arial', y=1.03)
+plt.title('BC-to-OA Ratio: Residual vs GEOS-Chem', fontsize=16, fontname='Arial', y=1.03)
 # plt.title('Imposing OM/OC = 2.5 Threshold', fontsize=18, fontname='Arial', y=1.03)
-plt.xlim([-2, 80])
-plt.ylim([-2, 80])
-plt.xticks([0, 20, 40, 60, 80], fontname='Arial', size=18)
-plt.yticks([0, 20, 40, 60, 80], fontname='Arial', size=18)
+plt.xlim([0, 1])
+plt.ylim([0, 1])
+plt.xticks([0, 0.2, 0.4, 0.6, 0.8, 1], fontname='Arial', size=18)
+plt.yticks([0, 0.2, 0.4, 0.6, 0.8, 1], fontname='Arial', size=18)
 ax.tick_params(axis='x', direction='out', width=1, length=5)
 ax.tick_params(axis='y', direction='out', width=1, length=5)
 
 # Perform linear regression
 slope, intercept, r_value, p_value, std_err = stats.linregress(compr_df['obs'], compr_df['sim'])
-sns.regplot(x='obs', y='sim', data=compr_df,
-            scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
+# sns.regplot(x='obs', y='sim', data=compr_df,
+#             scatter=False, ci=None, line_kws={'color': 'k', 'linestyle': '-', 'linewidth': 1.5}, ax=ax)
 
 # Perform the calculations for the entire dataset
 nmd_nrmsd_results = calculate_nmd_and_nrmsd(compr_df, obs_col='obs', sim_col='sim')
@@ -247,15 +247,15 @@ nrmsd = nmd_nrmsd_results['NRMSD (%)']
 intercept_display = abs(intercept)
 intercept_sign = '-' if intercept < 0 else '+'
 num_points = compr_df['obs'].count()  # Count non-null values
-plt.text(0.05, 0.7, f'y = {slope:.2f}x {intercept_sign} {intercept_display:.1f}\n$r^2$ = {r_value ** 2:.2f}\n$N$ = {num_points}\nNMD = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
+plt.text(0.05, 0.7, f'y = {slope:.3f}x {intercept_sign} {intercept_display:.2f}\n$r^2$ = {r_value ** 2:.3f}\n$N$ = {num_points}\nNMD = {nmd:.0f}%\nNRMSD = {nrmsd:.0f}%',
          transform=ax.transAxes, fontsize=16, color='black')
 
 # Set labels
 # plt.xlabel('FT-IR OC × GEOS-Chem OM/OC (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.xlabel('Aaron PM$_{2.5}$ - SPARTAN Components (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
-plt.ylabel('GEOS-Chem OA (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.xlabel('HIPS BC-to-Residual Ratio (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
+plt.ylabel('Simulated BC-to-OA Ratio (µg/m$^3$)', fontsize=18, color='black', fontname='Arial')
 
 # Show the plot
 plt.tight_layout()
-plt.savefig(out_dir + 'Scatter_{}_{}_{}_vs_Aaron_Residual_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
+# plt.savefig(out_dir + 'Scatter_{}_{}_{}_vs_RM_{}_{:02d}.svg'.format(cres, inventory, deposition, species, year), dpi=300)
 plt.show()

@@ -27,7 +27,7 @@ from netCDF4 import Dataset
 from datetime import datetime
 cres = 'C360'
 year = 2019
-species = 'BC/OA'
+species = 'BC_OA'
 inventory = 'CEDS'
 deposition = 'noLUO'
 
@@ -41,7 +41,7 @@ sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixe
 # sim_dir = '/Volumes/rvmartin2/Active/Shared/dandan.z/GCHP-v13.4.1/{}-CEDS01-fixed-vert-{}-merra2-output/monthly/'.format(cres.lower(), deposition) # CEDS, C180, noLUO, MERRA2
 obs_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Analysis_Data/Master_files/'
 site_dir = '/Volumes/rvmartin/Active/SPARTAN-shared/Site_Sampling/'
-out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
+# ut_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
 support_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/supportData/'
 otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurements/'
 ################################################################################################
@@ -49,7 +49,7 @@ otherMeas_dir = '/Volumes/rvmartin/Active/ren.yuxuan/BC_Comparison/otherMeasurem
 ################################################################################################
 cres = 'C360'
 year = 2019
-species = 'BC/OA'
+species = 'BC_OA'
 inventory = 'CEDS'
 deposition = 'noLUO'
 out_dir = '/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/{}_{}_{}_{}/'.format(cres.lower(), inventory, deposition, year)
@@ -81,7 +81,7 @@ for mon in range(1, 13):
     sim_lon[sim_lon > 180] -= 360
     sim_lat = np.array(sim_df.lats).astype('float32')
     sim_df['OA'] = sim_df['POA'] + sim_df['SOA']
-    sim_df['BC/OA'] = sim_df['BC']/sim_df['OA']
+    sim_df['BC_OA'] = sim_df['BC']/sim_df['OA']
     print(np.array(sim_df[species]).shape)
     sim_conc = np.array(sim_df[species])[0, :, :, :]  # Selecting the first level
     # sim_conc = np.array(sim_df[species]).reshape([6, 360, 360])
@@ -89,8 +89,8 @@ for mon in range(1, 13):
 
     # Load the Data
     obs_df = pd.read_excel('/Volumes/rvmartin/Active/ren.yuxuan/Mass_Reconstruction/FT-IR_OM_OC_vs_Residual_Chris_vs_sim_OMOC.xlsx', sheet_name='All')
-    obs_df['BC/OA'] = obs_df['BC/RM']
-    # obs_df['BC/OA'] = obs_df['BC/FTIR_OM']
+    obs_df['BC_OA'] = obs_df['BC/RM']
+    # obs_df['BC_OA'] = obs_df['BC/FTIR_OM']
     # obs_df['OA'] = obs_df.apply(lambda row: row['FTIR_OM'] if row['FTIR_OM']/row['FTIR_OC'] < 2.5 else row['FTIR_OC'] * 2.5, axis=1)
     obs_df['Longitude'] = obs_df['site_lon']
     obs_df['Latitude'] = obs_df['site_lat']
@@ -201,7 +201,7 @@ annual_df = monthly_df.groupby(['country', 'city']).agg({
 }).reset_index()
 annual_df.columns = ['country', 'city', 'sim', 'sim_se', 'obs', 'obs_se', 'num_obs', 'lat', 'lon']
 
-with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_AaronResidual_{}_{}.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
+with pd.ExcelWriter(out_dir + '{}_{}_{}_vs_RM_{}_{}.xlsx'.format(cres, inventory, deposition, species, year), engine='openpyxl') as writer:
     monthly_df.to_excel(writer, sheet_name='Mon', index=False)
     annual_df.to_excel(writer, sheet_name='Annual', index=False)
 
